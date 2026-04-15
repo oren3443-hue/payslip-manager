@@ -1,0 +1,1508 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>מערכת תלושים</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2335;
+    --border: #2a3050;
+    --accent: #4f7fff;
+    --accent2: #7c5cfc;
+    --success: #34d399;
+    --warning: #fbbf24;
+    --danger: #f87171;
+    --text: #e8ecf4;
+    --text2: #8b93b0;
+    --text3: #5a6380;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Heebo', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    direction: rtl;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #0f1117 0%, #181c27 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .header-icon {
+    width: 44px; height: 44px;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+  .header h1 { font-size: 1.4rem; font-weight: 700; }
+  .header p { font-size: 0.85rem; color: var(--text2); }
+
+  /* Main layout */
+  .main { max-width: 1000px; margin: 0 auto; padding: 32px 24px; }
+
+  /* Steps */
+  .step { margin-bottom: 28px; }
+  .step-label {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .step-num {
+    width: 22px; height: 22px;
+    background: var(--accent);
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0.7rem;
+    color: white;
+    font-weight: 700;
+  }
+
+  /* Cards */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 24px;
+  }
+
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 36px 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--bg);
+    position: relative;
+  }
+  .upload-zone:hover, .upload-zone.drag {
+    border-color: var(--accent);
+    background: rgba(79,127,255,0.05);
+  }
+  .upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .upload-icon { font-size: 2.5rem; margin-bottom: 10px; }
+  .upload-title { font-size: 1rem; font-weight: 600; margin-bottom: 4px; }
+  .upload-sub { font-size: 0.83rem; color: var(--text2); }
+  .upload-zone.done {
+    border-color: var(--success);
+    background: rgba(52,211,153,0.05);
+  }
+  .upload-zone.done .upload-icon::after { content: " ✓"; color: var(--success); font-size: 1.2rem; }
+
+  /* Preview table */
+  .preview-wrap {
+    margin-top: 16px;
+    max-height: 260px;
+    overflow-y: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+  }
+  th {
+    background: var(--surface2);
+    padding: 10px 14px;
+    text-align: right;
+    font-weight: 600;
+    font-size: 0.78rem;
+    color: var(--text2);
+    position: sticky; top: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  td {
+    padding: 9px 14px;
+    border-bottom: 1px solid rgba(42,48,80,0.5);
+    color: var(--text);
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(79,127,255,0.04); }
+  .badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  .badge-מפעל { background: rgba(251,191,36,0.15); color: var(--warning); }
+  .badge-סניפים { background: rgba(79,127,255,0.15); color: var(--accent); }
+  .badge-קווין { background: rgba(124,92,252,0.15); color: var(--accent2); }
+  .badge-אחר { background: rgba(139,147,176,0.15); color: var(--text2); }
+  .badge-no-email { background: rgba(248,113,113,0.15); color: var(--danger); }
+
+  /* Mode selector */
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .mode-btn {
+    background: var(--bg);
+    border: 1.5px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    cursor: pointer;
+    text-align: right;
+    transition: all 0.18s;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+  }
+  .mode-btn:hover {
+    border-color: var(--accent);
+    background: rgba(79,127,255,0.05);
+  }
+  .mode-btn.active {
+    border-color: var(--accent);
+    background: rgba(79,127,255,0.1);
+    color: white;
+  }
+  .mode-btn .mode-icon { font-size: 1.4rem; margin-bottom: 6px; display: block; }
+  .mode-btn .mode-title { font-weight: 600; display: block; margin-bottom: 2px; }
+  .mode-btn .mode-desc { font-size: 0.76rem; color: var(--text2); display: block; }
+  .mode-btn.active .mode-desc { color: rgba(255,255,255,0.6); }
+
+  /* Options panel */
+  .options-panel {
+    margin-top: 16px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 18px;
+  }
+  .options-panel label {
+    font-size: 0.83rem;
+    color: var(--text2);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  /* Toggle row */
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .toggle-label { font-size: 0.88rem; color: var(--text2); }
+  .toggle {
+    display: flex;
+    background: var(--surface2);
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .toggle button {
+    background: none;
+    border: none;
+    padding: 6px 14px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.82rem;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .toggle button.active {
+    background: var(--accent);
+    color: white;
+    font-weight: 600;
+  }
+
+  /* Dept checkboxes */
+  .dept-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .dept-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--bg);
+    color: var(--text2);
+    user-select: none;
+  }
+  .dept-chip:hover { border-color: var(--accent); color: var(--text); }
+  .dept-chip.selected { border-color: var(--accent); background: rgba(79,127,255,0.12); color: var(--accent); }
+  .dept-chip input { display: none; }
+
+  /* Employee multi-select */
+  .emp-search {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 14px;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    margin-bottom: 10px;
+    outline: none;
+    direction: rtl;
+  }
+  .emp-search:focus { border-color: var(--accent); }
+  .emp-list-wrap {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .emp-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 14px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(42,48,80,0.4);
+    transition: background 0.12s;
+  }
+  .emp-item:last-child { border-bottom: none; }
+  .emp-item:hover { background: rgba(79,127,255,0.06); }
+  .emp-item input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
+  .emp-item-name { font-size: 0.87rem; flex: 1; }
+  .emp-item-num { font-size: 0.78rem; color: var(--text3); }
+
+  /* Filename template */
+  .template-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 14px;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    outline: none;
+    direction: ltr;
+    text-align: left;
+  }
+  .template-input:focus { border-color: var(--accent); }
+  .var-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .var-chip {
+    display: inline-block;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 0.78rem;
+    cursor: pointer;
+    color: var(--accent);
+    font-family: monospace;
+    transition: background 0.12s;
+  }
+  .var-chip:hover { background: rgba(79,127,255,0.1); }
+
+  /* Excel column selector */
+  .select-styled {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    outline: none;
+    cursor: pointer;
+    direction: rtl;
+  }
+  .select-styled:focus { border-color: var(--accent); }
+
+  /* Action button */
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 13px 28px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 24px rgba(79,127,255,0.35); }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  .btn-secondary {
+    background: var(--surface2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 11px 22px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* Progress */
+  .progress-wrap { margin-top: 18px; }
+  .progress-bar-bg {
+    background: var(--surface2);
+    border-radius: 10px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 8px;
+  }
+  .progress-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 10px;
+    transition: width 0.3s;
+  }
+  .progress-text { font-size: 0.82rem; color: var(--text2); }
+
+  /* Result */
+  .result-box {
+    background: rgba(52,211,153,0.07);
+    border: 1px solid rgba(52,211,153,0.25);
+    border-radius: 10px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .result-info { font-size: 0.9rem; }
+  .result-info strong { color: var(--success); font-size: 1.05rem; }
+  .result-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  /* Missing email section */
+  .missing-section {
+    background: rgba(248,113,113,0.06);
+    border: 1px solid rgba(248,113,113,0.2);
+    border-radius: 10px;
+    padding: 18px;
+    margin-top: 16px;
+  }
+  .missing-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: var(--danger);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Upload excel inline */
+  .inline-upload {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1.5px dashed var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text2);
+    transition: all 0.15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .inline-upload:hover { border-color: var(--accent); color: var(--accent); }
+  .inline-upload input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .inline-upload.done { border-color: var(--success); color: var(--success); }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* Divider */
+  .divider { height: 1px; background: var(--border); margin: 24px 0; }
+
+  .hidden { display: none !important; }
+  .flex-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+  /* Info tip */
+  .tip {
+    font-size: 0.78rem;
+    color: var(--text3);
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  /* Loading spinner */
+  .spinner {
+    width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: inline-block;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Stats row */
+  .stats-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 14px;
+    flex-wrap: wrap;
+  }
+  .stat-chip {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+  }
+  .stat-chip strong { color: var(--accent); font-size: 1.1rem; display: block; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-icon">📑</div>
+  <div>
+    <h1>מערכת ניהול תלושים</h1>
+    <p>פיצול, מיון ושליחה של תלושי שכר</p>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- STEP 1: Upload PDF -->
+  <div class="step">
+    <div class="step-label"><span class="step-num">1</span> העלאת קובץ תלושים</div>
+    <div class="card">
+      <div class="upload-zone" id="pdfZone">
+        <input type="file" accept=".pdf" id="pdfInput">
+        <div class="upload-icon" id="pdfIcon">📄</div>
+        <div class="upload-title">גרור קובץ PDF לכאן או לחץ לבחירה</div>
+        <div class="upload-sub">קובץ PDF מאוחד עם כל תלושי השכר</div>
+      </div>
+      <div id="pdfPreviewWrap" class="hidden">
+        <div class="stats-row" id="pdfStats"></div>
+        <div class="preview-wrap" style="margin-top:14px">
+          <table id="previewTable">
+            <thead>
+              <tr>
+                <th>מספר עובד</th>
+                <th>שם עובד</th>
+                <th>מחלקה</th>
+                <th>קטגוריה</th>
+                <th>חודש</th>
+                <th>עמוד</th>
+              </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Mode selection -->
+  <div class="step" id="step2" style="display:none">
+    <div class="step-label"><span class="step-num">2</span> בחירת פעולה</div>
+    <div class="card">
+      <div class="mode-grid">
+        <button class="mode-btn" onclick="setMode('all')">
+          <span class="mode-icon">📂</span>
+          <span class="mode-title">כל התלושים</span>
+          <span class="mode-desc">פיצול לתלוש נפרד לכל עובד</span>
+        </button>
+        <button class="mode-btn" onclick="setMode('dept-auto')">
+          <span class="mode-icon">🏭</span>
+          <span class="mode-title">לפי מחלקות (אוטומטי)</span>
+          <span class="mode-desc">מפעל / סניפים / קווין קאנס / אחר</span>
+        </button>
+        <button class="mode-btn" onclick="setMode('dept-pick')">
+          <span class="mode-icon">🔍</span>
+          <span class="mode-title">מחלקות ספציפיות</span>
+          <span class="mode-desc">בחירה מרשימת המחלקות בקובץ</span>
+        </button>
+        <button class="mode-btn" onclick="setMode('excel')">
+          <span class="mode-icon">📊</span>
+          <span class="mode-title">רשימת עובדים מאקסל</span>
+          <span class="mode-desc">העלאת קובץ אקסל עם מספרי עובד</span>
+        </button>
+        <button class="mode-btn" onclick="setMode('pick')">
+          <span class="mode-icon">👤</span>
+          <span class="mode-title">עובדים ספציפיים</span>
+          <span class="mode-desc">בחירה ידנית מהרשימה</span>
+        </button>
+        <button class="mode-btn" onclick="setMode('missing')">
+          <span class="mode-icon">⚠️</span>
+          <span class="mode-title">עובדים ללא מייל</span>
+          <span class="mode-desc">זיהוי חסרי מייל + ייצוא תלושים לשליחה ידנית</span>
+        </button>
+      </div>
+
+      <!-- Options panels -->
+      <div id="opts-all" class="options-panel hidden"></div>
+
+      <div id="opts-dept-auto" class="options-panel hidden">
+        <div class="toggle-row">
+          <span class="toggle-label">סוג קובץ פלט:</span>
+          <div class="toggle">
+            <button class="active" onclick="setMerge('dept-auto','merged',this)">מחובר לפי קטגוריה</button>
+            <button onclick="setMerge('dept-auto','split',this)">מפוצל לתלושים בודדים</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="opts-dept-pick" class="options-panel hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label>בחר מחלקות:</label>
+          <button class="btn-secondary" style="padding:5px 14px;font-size:0.78rem" onclick="selectAllDepts()">בחר הכל</button>
+        </div>
+        <div class="dept-grid" id="deptChips"></div>
+        <div class="toggle-row" style="margin-top:14px">
+          <span class="toggle-label">סוג קובץ פלט:</span>
+          <div class="toggle">
+            <button class="active" onclick="setMerge('dept-pick','merged',this)">מחובר</button>
+            <button onclick="setMerge('dept-pick','split',this)">מפוצל</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="opts-excel" class="options-panel hidden">
+        <label>העלה קובץ אקסל עם רשימת עובדים:</label>
+        <div class="inline-upload" id="excelUploadZone">
+          <input type="file" accept=".xlsx,.xls,.csv" id="excelInput" onchange="loadExcel(this)">
+          <span>📊</span>
+          <span id="excelUploadLabel">לחץ לבחירת קובץ Excel</span>
+        </div>
+        <div id="excelColWrap" class="hidden" style="margin-top:12px">
+          <label>עמודת מספר עובד:</label>
+          <select class="select-styled" id="excelColSelect" onchange="setExcelCol()"></select>
+          <div class="tip">💡 בחר את העמודה שמכילה את מספר העובד (כפי שמופיע בתלוש)</div>
+        </div>
+        <div class="toggle-row" style="margin-top:14px">
+          <span class="toggle-label">סוג קובץ פלט:</span>
+          <div class="toggle">
+            <button class="active" onclick="setMerge('excel','merged',this)">מחובר</button>
+            <button onclick="setMerge('excel','split',this)">מפוצל</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="opts-pick" class="options-panel hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label>חפש ובחר עובדים:</label>
+          <button class="btn-secondary" style="padding:5px 14px;font-size:0.78rem" onclick="selectAllEmps()">בחר הכל</button>
+        </div>
+        <input class="emp-search" id="empSearch" placeholder="חיפוש לפי שם או מספר עובד..." oninput="filterEmployees()">
+        <div class="emp-list-wrap">
+          <div id="empList"></div>
+        </div>
+        <div class="tip" id="empSelCount">💡 לא נבחרו עובדים</div>
+        <div class="toggle-row" style="margin-top:14px">
+          <span class="toggle-label">סוג קובץ פלט:</span>
+          <div class="toggle">
+            <button class="active" onclick="setMerge('pick','merged',this)">מחובר</button>
+            <button onclick="setMerge('pick','split',this)">מפוצל</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- opts-email removed - n8n is now a global option -->
+
+      <div id="opts-missing" class="options-panel hidden">
+        <label>העלה קובץ אקסל עם פרטי עובדים:</label>
+        <div class="inline-upload" id="missingExcelZone">
+          <input type="file" accept=".xlsx,.xls,.csv" id="missingExcelInput" onchange="loadMissingExcel(this)">
+          <span>📊</span>
+          <span id="missingExcelLabel">לחץ לבחירת קובץ Excel</span>
+        </div>
+        <div id="missingColWrap" class="hidden" style="margin-top:12px">
+          <div class="flex-row">
+            <div>
+              <label>עמודת מספר עובד:</label>
+              <select class="select-styled" id="missingEmpCol"></select>
+            </div>
+            <div>
+              <label>עמודת מייל:</label>
+              <select class="select-styled" id="missingMailCol"></select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 3: Filename template -->
+  <div class="step" id="step3" style="display:none">
+    <div class="step-label"><span class="step-num">3</span> תבנית שם קובץ</div>
+    <div class="card">
+      <label style="font-size:0.85rem;color:var(--text2);display:block;margin-bottom:8px">תבנית שם הקובץ (לקבצים מפוצלים):</label>
+      <input class="template-input" id="filenameTemplate" value="{מספר_עובד}_{שם_עובד}_{חודש}">
+      <div class="var-chips">
+        <span class="var-chip" onclick="addVar('{מספר_עובד}')">{מספר_עובד}</span>
+        <span class="var-chip" onclick="addVar('{שם_עובד}')">{שם_עובד}</span>
+        <span class="var-chip" onclick="addVar('{מחלקה}')">{מחלקה}</span>
+        <span class="var-chip" onclick="addVar('{חודש}')">{חודש}</span>
+        <span class="var-chip" onclick="addVar('{ת_ז}')">{ת_ז}</span>
+        <span class="var-chip" onclick="addVar('{מספר_מחלקה}')">{מספר_מחלקה}</span>
+      </div>
+      <div class="tip" id="filenameTip"></div>
+    </div>
+  </div>
+
+  <!-- N8N toggle (global option) -->
+  <div class="step" id="stepN8n" style="display:none">
+    <div class="step-label"><span class="step-num">📧</span> שליחה במייל (n8n)</div>
+    <div class="card">
+      <div class="toggle-row">
+        <span class="toggle-label">הוסף קובץ employees.csv לשליחה ב-n8n:</span>
+        <div class="toggle">
+          <button class="active" onclick="setN8nMode(false,this)">כבוי</button>
+          <button onclick="setN8nMode(true,this)">פעיל</button>
+        </div>
+      </div>
+      <div id="n8nOptions" class="hidden">
+        <label>העלה קובץ אקסל עם פרטי עובדים (כולל מייל):</label>
+        <div class="inline-upload" id="emailExcelZone">
+          <input type="file" accept=".xlsx,.xls,.csv" id="emailExcelInput" onchange="loadEmailExcel(this)">
+          <span>📊</span>
+          <span id="emailExcelLabel">לחץ לבחירת קובץ Excel</span>
+        </div>
+        <div id="emailColWrap" class="hidden" style="margin-top:12px">
+          <div class="flex-row">
+            <div>
+              <label>עמודת מספר עובד:</label>
+              <select class="select-styled" id="emailEmpCol"></select>
+            </div>
+            <div>
+              <label>עמודת מייל:</label>
+              <select class="select-styled" id="emailMailCol"></select>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:14px">
+          <label>הערה לגוף המייל (אופציונלי):</label>
+          <textarea class="template-input" id="n8nEmailBody" rows="3" style="direction:rtl;text-align:right;resize:vertical" placeholder="לדוגמה: מצורף תלוש השכר שלך. לשאלות ניתן לפנות למחלקת שכר."></textarea>
+        </div>
+        <div class="tip" style="margin-top:10px">💡 יתווסף קובץ employees.csv ל-ZIP עם נושא מייל, גוף הודעה ופרטי שליחה מוכן ל-n8n</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 4: Execute -->
+  <div class="step" id="step4" style="display:none">
+    <div class="step-label"><span class="step-num">4</span> ביצוע</div>
+    <div class="card">
+      <button class="btn-primary" id="executeBtn" onclick="execute()">
+        <span>⚡</span> הפק תלושים
+      </button>
+      <div id="progressWrap" class="progress-wrap hidden">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressBar" style="width:0%"></div></div>
+        <div class="progress-text" id="progressText">מעבד...</div>
+      </div>
+      <div id="resultWrap" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// Use fake worker to avoid CDN worker CORS issues when opening as local file
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+// State
+let pdfBytes = null;
+let payslips = []; // [{pageIndex, empNum, empName, dept, deptNum, deptCat, month, idNum}]
+let currentMode = null;
+let mergeMode = { 'dept-auto': 'merged', 'dept-pick': 'merged', 'excel': 'merged', 'pick': 'merged' };
+let selectedDepts = new Set();
+let selectedEmps = new Set();
+let excelEmpNums = new Set();
+let excelColIndex = null;
+let emailData = []; // [{empNum, email, name}]
+let missingData = [];
+let n8nEnabled = false;
+
+// ─── PDF Upload ───────────────────────────────────────────────
+document.getElementById('pdfInput').addEventListener('change', e => {
+  if (e.target.files[0]) loadPDF(e.target.files[0]);
+});
+const pdfZone = document.getElementById('pdfZone');
+pdfZone.addEventListener('dragover', e => { e.preventDefault(); pdfZone.classList.add('drag'); });
+pdfZone.addEventListener('dragleave', () => pdfZone.classList.remove('drag'));
+pdfZone.addEventListener('drop', e => {
+  e.preventDefault(); pdfZone.classList.remove('drag');
+  if (e.dataTransfer.files[0]) loadPDF(e.dataTransfer.files[0]);
+});
+
+async function loadPDF(file) {
+  const icon = document.getElementById('pdfIcon');
+  icon.textContent = '⏳';
+  try {
+  pdfBytes = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice(0) }).promise;
+  payslips = [];
+
+  for (let i = 0; i < pdf.numPages; i++) {
+    const page = await pdf.getPage(i + 1);
+    const tc = await page.getTextContent();
+
+    // Build positional items – each item has x, y, str
+    const posItems = tc.items.map(it => ({
+      x: Math.round(it.transform[4]),
+      y: Math.round(it.transform[5]),
+      str: it.str.trim()
+    })).filter(it => it.str);
+
+    // Also build plain text as fallback
+    const plainText = tc.items.map(it => it.str).join(' ');
+
+    const data = parsePayslip(plainText, i, posItems);
+    if (data) payslips.push(data);
+  }
+
+  pdfZone.classList.add('done');
+  icon.textContent = '📄';
+  renderPreview();
+  if (payslips.length === 0) {
+    document.getElementById('pdfStats').innerHTML = `<div style="color:var(--danger);font-size:0.85rem">⚠️ לא נמצאו תלושים בקובץ – ודא שה-PDF טקסטואלי ולא סרוק</div>`;
+    document.getElementById('pdfPreviewWrap').classList.remove('hidden');
+    return;
+  }
+  document.getElementById('step2').style.display = '';
+  document.getElementById('step3').style.display = '';
+  document.getElementById('stepN8n').style.display = '';
+  document.getElementById('step4').style.display = '';
+  } catch(err) {
+    icon.textContent = '❌';
+    pdfZone.querySelector('.upload-title').textContent = 'שגיאה בטעינת הקובץ';
+    pdfZone.querySelector('.upload-sub').textContent = /password/i.test(err.message) ? 'הקובץ מוגן בסיסמה' : 'ודא שמדובר בקובץ PDF תקין';
+    console.error(err);
+  }
+}
+
+function parsePayslip(text, pageIndex, posItems) {
+  // posItems: [{x, y, str}] – position-based extraction (preferred)
+  // text: fallback plain text
+
+  let empNumRaw = '', empName = '', deptNum = '', deptName = '', deptCat = 'אחר', month = '', idNum = '';
+
+  // --- Strategy 1: plain text (most reliable) ---
+  // NOTE: Hebrew PDF text often comes in REVERSED word order (RTL extraction),
+  // e.g. "0245   העובד:   מספר" instead of "מספר העובד: 0245"
+  // So we try BOTH normal and reversed patterns.
+  const t = text.replace(/\s+/g, ' ');
+
+  // Employee number
+  const empPatterns = [
+    // Reversed RTL: "0245   העובד:   מספר"
+    /(\d{2,5})\s+העובד[:\s]+מספר/,
+    // Simpler reversed: "0245   העובד:"
+    /(\d{2,5})\s+העובד/,
+    // Normal: "מספר העובד: 0245"
+    /מספר\s+העובד[:\s]+(\d{2,5})/,
+    /העובד[:\s]+(\d{2,5})/,
+  ];
+  for (const pat of empPatterns) {
+    const m = t.match(pat);
+    if (m) { empNumRaw = m[1].trim(); break; }
+  }
+
+  // ID number
+  const idPatterns = [
+    // Reversed RTL: "28680056   זהות:   מספר"
+    /(\d{5,9})\s+זהות:?\s+מספר/,
+    // Normal
+    /מספר\s+זהות:?\s*(\d{5,9})/,
+    /זהות:?\s*(\d{5,9})/,
+  ];
+  for (const pat of idPatterns) {
+    const m = t.match(pat);
+    if (m) { idNum = m[1].trim(); break; }
+  }
+
+  // Department - e.g. reversed: "נהגים   מ.עקיף   014   מחלקה:"
+  const deptPatterns = [
+    // Reversed RTL: "שם_מחלקה   ...   014   מחלקה:"
+    /(\d{2,4})\s+מחלקה:?/,
+    // Normal: "מחלקה: 014 שם"
+    /מחלקה:?\s*(\d{2,4})/,
+  ];
+  for (const pat of deptPatterns) {
+    const m = t.match(pat);
+    if (m) { deptNum = m[1].trim(); break; }
+  }
+  // Extract dept name - look for Hebrew/English text near "מחלקה"
+  // Use [\u05D0-\u05EAA-Za-z ] to avoid capturing "וותק:" or other labels
+  const deptNamePatterns = [
+    // Reversed: "נהגים   מ.עקיף   014   מחלקה:"
+    /([\u05D0-\u05EAA-Za-z][\u05D0-\u05EAA-Za-z ]*?)\s+מ\.עקי[ף]?\s+\d+\s+מחלקה/,
+    /([\u05D0-\u05EAA-Za-z][\u05D0-\u05EAA-Za-z ]*?)\s+\d+\s+מחלקה/,
+    // Normal: "מחלקה: 014 שם_מחלקה"
+    /מחלקה:?\s*\d+\s+([\u05D0-\u05EAA-Za-z][\u05D0-\u05EAA-Za-z ]*?)(?=\s{2,}|תחילת|ותק|$)/,
+  ];
+  for (const pat of deptNamePatterns) {
+    const m = t.match(pat);
+    if (m) { deptName = m[1].trim(); break; }
+  }
+
+  // Month - e.g. reversed: "03/2026   לחודש   שכר   תלוש"
+  const monthPatterns = [
+    // Reversed RTL: "03/2026   לחודש"
+    /(\d{1,2})\/(\d{4})\s+לחודש/,
+    // Normal: "לחודש 03/2026"
+    /לחודש\s+(\d{1,2})\/(\d{4})/,
+  ];
+  for (const pat of monthPatterns) {
+    const m = t.match(pat);
+    if (m) { month = `${m[1].padStart(2,'0')}-${m[2]}`; break; }
+  }
+
+  // Name - try "לכבוד" pattern (Hebrew or English names)
+  const namePatterns = [
+    // Reversed RTL Hebrew: "שם העובד   לכבוד"
+    /([\u05D0-\u05EA][\u05D0-\u05EA '\-]{1,30}?)\s+לכבוד/,
+    // Reversed RTL English: "LAST FIRST   לכבוד"
+    /([A-Za-z][A-Za-z '\-]{1,30}?)\s+לכבוד/,
+    // Normal Hebrew: "לכבוד שם העובד"
+    /לכבוד\s+([\u05D0-\u05EA][\u05D0-\u05EA '\-]{1,30})/,
+    // Normal English: "לכבוד FIRST LAST"
+    /לכבוד\s+([A-Za-z][A-Za-z '\-]{1,30})/,
+  ];
+  for (const pat of namePatterns) {
+    const m = t.match(pat);
+    if (m) { empName = m[1].trim().split(/\s{2,}/)[0].trim(); break; }
+  }
+
+  // --- Strategy 2: positional items as fallback ---
+  // Labels like "מספר" and "העובד:" are separate items in this PDF format
+  if (posItems && posItems.length > 0) {
+    const Y_TOL = 5;
+
+    // Helper: find items on the same line as a given item
+    const sameLineAs = (item) => posItems.filter(i =>
+      Math.abs(i.y - item.y) <= Y_TOL && i !== item
+    );
+
+    // Employee number (if not found via plain text)
+    if (!empNumRaw) {
+      const label = posItems.find(i => i.str === 'העובד:' || i.str === 'העובד');
+      if (label) {
+        const line = sameLineAs(label);
+        const val = line.find(i => /^\d{2,5}$/.test(i.str.trim()));
+        if (val) empNumRaw = val.str.trim();
+      }
+    }
+
+    // ID (if not found)
+    if (!idNum) {
+      const label = posItems.find(i => i.str === 'זהות:' || i.str === 'זהות');
+      if (label) {
+        const line = sameLineAs(label);
+        const val = line.find(i => /^\d{5,9}$/.test(i.str.trim()));
+        if (val) idNum = val.str.trim();
+      }
+    }
+
+    // Department (if not found)
+    if (!deptNum) {
+      const label = posItems.find(i => i.str === 'מחלקה:' || i.str === 'מחלקה');
+      if (label) {
+        const line = sameLineAs(label);
+        for (const item of line) {
+          if (/^\d{2,4}$/.test(item.str.trim()) && !deptNum) deptNum = item.str.trim();
+          else if (/[\u05D0-\u05EA]/.test(item.str) && item.str !== 'מחלקה:' && item.str !== 'מחלקה' && !deptName) deptName = item.str.trim();
+        }
+      }
+    }
+
+    // Month (if not found)
+    if (!month) {
+      const label = posItems.find(i => i.str === 'לחודש');
+      if (label) {
+        const line = sameLineAs(label);
+        const val = line.find(i => /^\d{1,2}\/\d{4}$/.test(i.str.trim()));
+        if (val) {
+          const mm = val.str.match(/(\d{1,2})\/(\d{4})/);
+          if (mm) month = `${mm[1].padStart(2,'0')}-${mm[2]}`;
+        }
+      }
+    }
+
+    // Name (if not found)
+    if (!empName) {
+      const kvod = posItems.find(i => i.str === 'לכבוד' || i.str.includes('לכבוד'));
+      if (kvod) {
+        const nearby = posItems.filter(i =>
+          Math.abs(i.y - kvod.y) <= 25 && i !== kvod && !i.str.includes('לכבוד')
+        );
+        nearby.sort((a, b) => Math.abs(a.y - kvod.y) - Math.abs(b.y - kvod.y));
+        const n = nearby.find(i => (/[\u05D0-\u05EA]/.test(i.str) || /[A-Za-z]/.test(i.str)) && i.str.length > 2 && !/\d{4}/.test(i.str) && !/מחלקה|מספר|זהות|תלוש|שכר/.test(i.str));
+        if (n) empName = n.str.trim();
+      }
+    }
+  }
+
+  deptCat = categorizeDept(deptName);
+
+  if (!empNumRaw) return null;
+
+  // Remove leading zeros for matching, keep raw for filename
+  const empNum = String(parseInt(empNumRaw, 10));
+
+  return { pageIndex, empNum, empNumRaw, empName, deptNum, deptName, deptCat, month, idNum };
+}
+
+function buildFilename(tmpl, p) {
+  return tmpl
+    .replace(/{מספר_עובד}/g, p.empNumRaw || p.empNum)
+    .replace(/{שם_עובד}/g, p.empName.replace(/\s+/g,'_'))
+    .replace(/{מחלקה}/g, p.deptName.replace(/\s+/g,'_'))
+    .replace(/{חודש}/g, p.month)
+    .replace(/{ת_ז}/g, p.idNum)
+    .replace(/{מספר_מחלקה}/g, p.deptNum);
+}
+
+function categorizeDept(name) {
+  if (!name) return 'אחר';
+  const n = name.trim();
+  if (/queen\s*cans/i.test(n)) return 'קווין קאנס';
+  if (/^מ\./.test(n)) return 'מפעל';
+  if (/^ס\./.test(n)) return 'סניפים';
+  return 'אחר';
+}
+
+function renderPreview() {
+  const tbody = document.getElementById('previewBody');
+  tbody.innerHTML = '';
+  payslips.forEach(p => {
+    const catClass = p.deptCat === 'מפעל' ? 'badge-מפעל' :
+                     p.deptCat === 'סניפים' ? 'badge-סניפים' :
+                     p.deptCat === 'קווין קאנס' ? 'badge-קווין' : 'badge-אחר';
+    tbody.innerHTML += `<tr>
+      <td>${p.empNum}</td>
+      <td>${p.empName}</td>
+      <td>${p.deptName}</td>
+      <td><span class="badge ${catClass}">${p.deptCat}</span></td>
+      <td>${p.month}</td>
+      <td>${p.pageIndex + 1}</td>
+    </tr>`;
+  });
+
+  // Stats
+  const cats = {};
+  payslips.forEach(p => { cats[p.deptCat] = (cats[p.deptCat]||0)+1; });
+  let statsHtml = `<div class="stat-chip"><strong>${payslips.length}</strong>תלושים</div>`;
+  Object.entries(cats).forEach(([k,v]) => {
+    statsHtml += `<div class="stat-chip"><strong>${v}</strong>${k}</div>`;
+  });
+  document.getElementById('pdfStats').innerHTML = statsHtml;
+  document.getElementById('pdfPreviewWrap').classList.remove('hidden');
+}
+
+// ─── Mode ────────────────────────────────────────────────────
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.querySelectorAll('.options-panel').forEach(p => p.classList.add('hidden'));
+  document.getElementById('opts-' + mode).classList.remove('hidden');
+
+  // Populate dept chips
+  if (mode === 'dept-pick') renderDeptChips();
+  if (mode === 'pick') renderEmpList();
+
+  updateTemplateVisibility();
+  updateFilenameTip();
+}
+
+function setMerge(mode, val, btn) {
+  mergeMode[mode] = val;
+  btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  updateTemplateVisibility();
+}
+
+function updateTemplateVisibility() {
+  const isSplit = !currentMode || currentMode === 'all' ||
+    (currentMode === 'dept-auto' && mergeMode['dept-auto'] === 'split') ||
+    (currentMode === 'dept-pick' && mergeMode['dept-pick'] === 'split') ||
+    (currentMode === 'excel' && mergeMode['excel'] === 'split') ||
+    (currentMode === 'pick' && mergeMode['pick'] === 'split') ||
+    currentMode === 'email' || currentMode === 'missing';
+}
+
+function addVar(v) {
+  const inp = document.getElementById('filenameTemplate');
+  inp.value += v;
+  updateFilenameTip();
+}
+
+function updateFilenameTip() {
+  const tmpl = document.getElementById('filenameTemplate').value;
+  if (!payslips.length) return;
+  const p = payslips[0];
+  const sample = buildFilename(tmpl, p);
+  document.getElementById('filenameTip').textContent = '📝 דוגמה: ' + sample + '.pdf';
+}
+document.getElementById('filenameTemplate').addEventListener('input', updateFilenameTip);
+
+// ─── Dept chips ───────────────────────────────────────────────
+function renderDeptChips() {
+  const allDepts = [...new Set(payslips.map(p => p.deptName))].filter(Boolean).sort();
+  const container = document.getElementById('deptChips');
+  container.innerHTML = '';
+  allDepts.forEach(d => {
+    const chip = document.createElement('label');
+    chip.className = 'dept-chip' + (selectedDepts.has(d) ? ' selected' : '');
+    chip.innerHTML = `<input type="checkbox" value="${d}" onchange="toggleDept('${d}',this)"> ${d}`;
+    container.appendChild(chip);
+  });
+}
+
+function toggleDept(d, cb) {
+  if (cb.checked) selectedDepts.add(d);
+  else selectedDepts.delete(d);
+  cb.closest('.dept-chip').classList.toggle('selected', cb.checked);
+}
+
+function selectAllDepts() {
+  const allDepts = [...new Set(payslips.map(p => p.deptName))].filter(Boolean);
+  const allSelected = allDepts.every(d => selectedDepts.has(d));
+  if (allSelected) {
+    selectedDepts.clear();
+  } else {
+    allDepts.forEach(d => selectedDepts.add(d));
+  }
+  renderDeptChips();
+}
+
+// ─── Employee list ────────────────────────────────────────────
+function renderEmpList(filter = '') {
+  const container = document.getElementById('empList');
+  const lf = filter.toLowerCase();
+  const filtered = payslips.filter(p =>
+    !filter || p.empName.includes(filter) || p.empNum.includes(filter) || p.empName.toLowerCase().includes(lf)
+  );
+  // dedupe by empNum
+  const seen = new Set();
+  const unique = filtered.filter(p => { if (seen.has(p.empNum)) return false; seen.add(p.empNum); return true; });
+
+  container.innerHTML = unique.map(p => `
+    <div class="emp-item">
+      <input type="checkbox" ${selectedEmps.has(p.empNum) ? 'checked' : ''} onchange="toggleEmp('${p.empNum}',this)">
+      <span class="emp-item-name">${p.empName}</span>
+      <span class="emp-item-num">${p.empNum}</span>
+    </div>
+  `).join('');
+  updateEmpCount();
+}
+
+function filterEmployees() {
+  renderEmpList(document.getElementById('empSearch').value);
+}
+
+function toggleEmp(num, cb) {
+  if (cb.checked) selectedEmps.add(num);
+  else selectedEmps.delete(num);
+  updateEmpCount();
+}
+
+function updateEmpCount() {
+  document.getElementById('empSelCount').textContent =
+    selectedEmps.size ? `✅ נבחרו ${selectedEmps.size} עובדים` : '💡 לא נבחרו עובדים';
+}
+
+function selectAllEmps() {
+  const allNums = [...new Set(payslips.map(p => p.empNum))];
+  const allSelected = allNums.every(n => selectedEmps.has(n));
+  if (allSelected) {
+    selectedEmps.clear();
+  } else {
+    allNums.forEach(n => selectedEmps.add(n));
+  }
+  renderEmpList(document.getElementById('empSearch').value);
+}
+
+// ─── N8N toggle ──────────────────────────────────────────────
+function setN8nMode(enabled, btn) {
+  n8nEnabled = enabled;
+  btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('n8nOptions').classList.toggle('hidden', !enabled);
+}
+
+function getTimestamp() {
+  const d = new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+}
+
+function buildEmailMap() {
+  const excelData = window._emailExcelData;
+  if (!excelData) return {};
+  const empCol = parseInt(document.getElementById('emailEmpCol').value);
+  const mailCol = parseInt(document.getElementById('emailMailCol').value);
+  const map = {};
+  excelData.slice(1).forEach(row => {
+    const num = String(parseInt(String(row[empCol]||'').trim()) || '');
+    const mail = String(row[mailCol]||'').trim();
+    if (num && mail) map[num] = mail;
+  });
+  return map;
+}
+
+function buildCsvContent(filtered, emailMap) {
+  const tmpl = document.getElementById('filenameTemplate').value;
+  const body = (document.getElementById('n8nEmailBody').value || '').trim();
+  const rows = [['employee_number','name','email','department','month','filename','subject','body']];
+  filtered.forEach(p => {
+    const fname = buildFilename(tmpl, p) + '.pdf';
+    const email = emailMap[p.empNum] || '';
+    const subject = `תלוש שכר לחודש ${p.month} לעובד מספר ${p.empNum} ${p.empName}`;
+    rows.push([p.empNum, p.empName, email, p.deptName, p.month, fname, subject, body]);
+  });
+  return '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+}
+
+// ─── Excel loading ────────────────────────────────────────────
+function loadExcel(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const headers = data[0] || [];
+    const sel = document.getElementById('excelColSelect');
+    sel.innerHTML = headers.map((h,i) => `<option value="${i}">${h || 'עמודה '+(i+1)}</option>`).join('');
+    document.getElementById('excelColWrap').classList.remove('hidden');
+    document.getElementById('excelUploadZone').classList.add('done');
+    document.getElementById('excelUploadLabel').textContent = '✓ ' + file.name;
+    // store data
+    window._excelData = data;
+    setExcelCol();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function setExcelCol() {
+  const data = window._excelData; if (!data) return;
+  const col = parseInt(document.getElementById('excelColSelect').value);
+  excelEmpNums = new Set(data.slice(1).map(r => String(r[col]||'').trim().replace(/\.0$/,'')).filter(Boolean));
+}
+
+async function loadEmailExcel(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const headers = data[0] || [];
+    const empSel = document.getElementById('emailEmpCol');
+    const mailSel = document.getElementById('emailMailCol');
+    const opts = headers.map((h,i) => `<option value="${i}">${h || 'עמודה '+(i+1)}</option>`).join('');
+    empSel.innerHTML = opts; mailSel.innerHTML = opts;
+    // Auto-detect
+    headers.forEach((h,i) => {
+      if (/עובד|emp/i.test(h)) empSel.value = i;
+      if (/מייל|mail|email|דוא/i.test(h)) mailSel.value = i;
+    });
+    document.getElementById('emailColWrap').classList.remove('hidden');
+    document.getElementById('emailExcelZone').classList.add('done');
+    document.getElementById('emailExcelLabel').textContent = '✓ ' + file.name;
+    window._emailExcelData = data;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function loadMissingExcel(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const wb = XLSX.read(e.target.result, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+    const headers = data[0] || [];
+    const empSel = document.getElementById('missingEmpCol');
+    const mailSel = document.getElementById('missingMailCol');
+    const opts = headers.map((h,i) => `<option value="${i}">${h || 'עמודה '+(i+1)}</option>`).join('');
+    empSel.innerHTML = opts; mailSel.innerHTML = opts;
+    headers.forEach((h,i) => {
+      if (/^עובד$|^emp/i.test(String(h))) empSel.value = i;
+      if (/מייל|mail|email|דוא/i.test(String(h))) mailSel.value = i;
+    });
+    document.getElementById('missingColWrap').classList.remove('hidden');
+    document.getElementById('missingExcelZone').classList.add('done');
+    document.getElementById('missingExcelLabel').textContent = '✓ ' + file.name;
+    window._missingExcelData = data;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ─── Execute ──────────────────────────────────────────────────
+async function execute() {
+  if (!pdfBytes || !currentMode) return;
+  const btn = document.getElementById('executeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> מעבד...';
+  document.getElementById('progressWrap').classList.remove('hidden');
+  document.getElementById('resultWrap').innerHTML = '';
+
+  try {
+    let filtered = [...payslips];
+
+    if (currentMode === 'dept-pick') {
+      filtered = payslips.filter(p => selectedDepts.has(p.deptName));
+    } else if (currentMode === 'excel') {
+      filtered = payslips.filter(p => excelEmpNums.has(p.empNum));
+    } else if (currentMode === 'pick') {
+      filtered = payslips.filter(p => selectedEmps.has(p.empNum));
+    }
+
+    if (currentMode === 'dept-auto') {
+      await executeDeptAuto();
+    } else if (currentMode === 'missing') {
+      await executeMissing();
+    } else {
+      const isSplit = currentMode === 'all' || mergeMode[currentMode] === 'split';
+      if (isSplit) {
+        await executeSplit(filtered);
+      } else {
+        await executeMerged(filtered, 'תלושים_מחוברים');
+      }
+    }
+  } catch(err) {
+    let msg = err.message || '';
+    let hebrewMsg = 'אירעה שגיאה בעיבוד הקובץ.';
+    if (/password/i.test(msg)) hebrewMsg = 'הקובץ מוגן בסיסמה – נא להסיר את ההגנה ולנסות שוב.';
+    else if (/invalid|corrupt/i.test(msg)) hebrewMsg = 'הקובץ פגום או אינו קובץ PDF תקין.';
+    else if (/worker/i.test(msg)) hebrewMsg = 'שגיאת טעינה – נא לרענן את הדף ולנסות שוב.';
+    else if (/network|fetch/i.test(msg)) hebrewMsg = 'שגיאת רשת – בדוק את החיבור ורענן.';
+    else if (/no payslips|0 תלושים/i.test(msg)) hebrewMsg = 'לא נמצאו תלושים בקובץ – ודא שמדובר ב-PDF טקסטואלי (לא סרוק).';
+    document.getElementById('resultWrap').innerHTML = `<div style="color:var(--danger);font-size:0.88rem;padding:12px;background:rgba(248,113,113,0.08);border-radius:8px;border:1px solid rgba(248,113,113,0.2)">⚠️ ${hebrewMsg}</div>`;
+    console.error(err);
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<span>⚡</span> הפק תלושים';
+}
+
+function setProgress(val, text) {
+  document.getElementById('progressBar').style.width = val + '%';
+  document.getElementById('progressText').textContent = text;
+}
+
+async function extractPage(pageIndex) {
+  const { PDFDocument } = PDFLib;
+  const srcDoc = await PDFDocument.load(pdfBytes);
+  const newDoc = await PDFDocument.create();
+  const [page] = await newDoc.copyPages(srcDoc, [pageIndex]);
+  newDoc.addPage(page);
+  return newDoc.save();
+}
+
+async function executeSplit(filtered) {
+  const tmpl = document.getElementById('filenameTemplate').value;
+  const zip = new JSZip();
+  for (let i = 0; i < filtered.length; i++) {
+    const p = filtered[i];
+    setProgress(Math.round((i/filtered.length)*100), `מעבד: ${p.empName} (${i+1}/${filtered.length})`);
+    const bytes = await extractPage(p.pageIndex);
+    const fname = buildFilename(tmpl, p) + '.pdf';
+    zip.file(fname, bytes);
+  }
+  if (n8nEnabled) {
+    const emailMap = buildEmailMap();
+    zip.file('employees.csv', buildCsvContent(filtered, emailMap));
+  }
+  setProgress(100, 'מסיים...');
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const ts = getTimestamp();
+  let msg = `${filtered.length} תלושים מוכנים להורדה`;
+  if (n8nEnabled) msg += ' + employees.csv';
+  showResult(msg, blob, `תלושים_${ts}.zip`);
+}
+
+async function executeMerged(filtered, name) {
+  const { PDFDocument } = PDFLib;
+  const srcDoc = await PDFDocument.load(pdfBytes);
+  const newDoc = await PDFDocument.create();
+  for (let i = 0; i < filtered.length; i++) {
+    setProgress(Math.round((i/filtered.length)*100), `מאחד: ${i+1}/${filtered.length}`);
+    const [page] = await newDoc.copyPages(srcDoc, [filtered[i].pageIndex]);
+    newDoc.addPage(page);
+  }
+  setProgress(100, 'מסיים...');
+  const pdfBytesOut = await newDoc.save();
+  const ts = getTimestamp();
+
+  if (n8nEnabled) {
+    // Wrap in ZIP with CSV
+    const zip = new JSZip();
+    zip.file(name + '.pdf', pdfBytesOut);
+    const emailMap = buildEmailMap();
+    zip.file('employees.csv', buildCsvContent(filtered, emailMap));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    showResult(`${filtered.length} תלושים מחוברים + employees.csv`, blob, `${name}_${ts}.zip`);
+  } else {
+    const blob = new Blob([pdfBytesOut], { type: 'application/pdf' });
+    showResult(`${filtered.length} תלושים מחוברים`, blob, `${name}_${ts}.pdf`);
+  }
+}
+
+async function executeDeptAuto() {
+  const cats = ['מפעל', 'סניפים', 'קווין קאנס', 'אחר'];
+  const isSplit = mergeMode['dept-auto'] === 'split';
+  const zip = new JSZip();
+  const tmpl = document.getElementById('filenameTemplate').value;
+  const { PDFDocument } = PDFLib;
+  let total = 0;
+
+  for (const cat of cats) {
+    const group = payslips.filter(p => p.deptCat === cat);
+    if (!group.length) continue;
+
+    if (isSplit) {
+      const folder = zip.folder(cat);
+      for (let i = 0; i < group.length; i++) {
+        setProgress(Math.round((total/payslips.length)*100), `${cat}: ${i+1}/${group.length}`);
+        const bytes = await extractPage(group[i].pageIndex);
+        folder.file(buildFilename(tmpl, group[i]) + '.pdf', bytes);
+        total++;
+      }
+    } else {
+      const srcDoc = await PDFDocument.load(pdfBytes);
+      const newDoc = await PDFDocument.create();
+      for (const p of group) {
+        setProgress(Math.round((total/payslips.length)*100), `מאחד ${cat}...`);
+        const [page] = await newDoc.copyPages(srcDoc, [p.pageIndex]);
+        newDoc.addPage(page);
+        total++;
+      }
+      zip.file(`${cat}.pdf`, await newDoc.save());
+    }
+  }
+
+  if (n8nEnabled) {
+    const emailMap = buildEmailMap();
+    zip.file('employees.csv', buildCsvContent(payslips, emailMap));
+  }
+  setProgress(100, 'מסיים...');
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const ts = getTimestamp();
+  let msg = `${payslips.length} תלושים מחולקים ל-${cats.length} קטגוריות`;
+  if (n8nEnabled) msg += ' + employees.csv';
+  showResult(msg, blob, `תלושים_לפי_מחלקה_${ts}.zip`);
+}
+
+async function executeMissing() {
+  const excelData = window._missingExcelData;
+  if (!excelData) { alert('נא להעלות קובץ אקסל עם פרטי עובדים'); return; }
+  const empCol = parseInt(document.getElementById('missingEmpCol').value);
+  const mailCol = parseInt(document.getElementById('missingMailCol').value);
+
+  const emailMap = {};
+  const nameMap = {};
+  excelData.slice(1).forEach(row => {
+    const num = String(row[empCol]||'').trim().replace(/\.0$/,'');
+    const mail = String(row[mailCol]||'').trim();
+    if (num) { emailMap[num] = mail; nameMap[num] = row[1] || ''; }
+  });
+
+  // Find payslips with no email
+  const missing = payslips.filter(p => !emailMap[p.empNum] || !emailMap[p.empNum].trim());
+
+  if (!missing.length) {
+    setProgress(100, 'הושלם');
+    document.getElementById('resultWrap').innerHTML = `
+      <div class="result-box"><div class="result-info">✅ <strong>כל העובדים בתלושים יש להם מייל!</strong></div></div>`;
+    return;
+  }
+
+  const tmpl = document.getElementById('filenameTemplate').value;
+  const zip = new JSZip();
+  const xlsxRows = [['מספר עובד', 'שם עובד', 'מחלקה', 'חודש']];
+
+  for (let i = 0; i < missing.length; i++) {
+    const p = missing[i];
+    setProgress(Math.round((i/missing.length)*100), `מעבד: ${p.empName}`);
+    const bytes = await extractPage(p.pageIndex);
+    zip.file(buildFilename(tmpl, p) + '.pdf', bytes);
+    xlsxRows.push([p.empNum, p.empName, p.deptName, p.month]);
+  }
+
+  // Build Excel report
+  const ws = XLSX.utils.aoa_to_sheet(xlsxRows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'חסרי מייל');
+  const xlsxBytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  zip.file('חסרי_מייל.xlsx', xlsxBytes);
+
+  setProgress(100, 'מסיים...');
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const ts = getTimestamp();
+  showResult(`${missing.length} עובדים ללא מייל`, blob, `חסרי_מייל_${ts}.zip`,
+    `📋 הורד רשימת חסרי מייל (Excel)`, () => {
+      const b = new Blob([xlsxBytes], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      downloadBlob(b, 'חסרי_מייל.xlsx');
+    });
+}
+
+function showResult(msg, blob, filename, secondLabel, secondAction) {
+  let btns = `<button class="btn-primary" onclick="downloadBlob(window._lastBlob,'${filename}')">⬇️ הורד ${filename}</button>`;
+  if (secondLabel) btns += `<button class="btn-secondary" id="secondBtn">${secondLabel}</button>`;
+  document.getElementById('resultWrap').innerHTML = `
+    <div class="result-box">
+      <div class="result-info"><strong>${msg}</strong></div>
+      <div class="result-btns">${btns}</div>
+    </div>`;
+  window._lastBlob = blob;
+  if (secondAction) {
+    document.getElementById('secondBtn').onclick = secondAction;
+  }
+}
+
+function downloadBlob(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+</script>
+</body>
+</html>
