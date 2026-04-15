@@ -491,6 +491,10 @@
     font-size: 0.82rem;
   }
   .stat-chip strong { color: var(--accent); font-size: 1.1rem; display: block; }
+  .stat-chip.filterable { cursor: pointer; transition: all 0.15s; user-select: none; }
+  .stat-chip.filterable:hover { border-color: var(--accent); }
+  .stat-chip.filterable.active { border-color: var(--accent); background: rgba(79,127,255,0.15); }
+  .stat-chip.filterable.dimmed { opacity: 0.35; }
 </style>
 </head>
 <body>
@@ -566,6 +570,11 @@
           <span class="mode-title">עובדים ספציפיים</span>
           <span class="mode-desc">בחירה ידנית מהרשימה</span>
         </button>
+        <button class="mode-btn" onclick="setMode('review')">
+          <span class="mode-icon">📋</span>
+          <span class="mode-title">שליחה לבדיקת תלושים</span>
+          <span class="mode-desc">ZIP עם תיקיות לפי קטגוריה ← מחלקה (מאוחד)</span>
+        </button>
         <button class="mode-btn" onclick="setMode('missing')">
           <span class="mode-icon">⚠️</span>
           <span class="mode-title">עובדים ללא מייל</span>
@@ -639,6 +648,10 @@
             <button onclick="setMerge('pick','split',this)">מפוצל</button>
           </div>
         </div>
+      </div>
+
+      <div id="opts-review" class="options-panel hidden">
+        <div class="tip">💡 ייצוא ZIP עם מבנה: קטגוריה (מפעל/סניפים/...) ← PDF מאוחד לכל מחלקה</div>
       </div>
 
       <!-- opts-email removed - n8n is now a global option -->
@@ -866,18 +879,37 @@ function parsePayslip(text, pageIndex, posItems) {
     const m = t.match(pat);
     if (m) { deptNum = m[1].trim(); break; }
   }
-  // Extract dept name - look for Hebrew/English text near "מחלקה"
-  // Use [\u05D0-\u05EAA-Za-z ] to avoid capturing "וותק:" or other labels
-  const deptNamePatterns = [
-    // Reversed: "נהגים   מ.עקיף   014   מחלקה:"
-    /([\u05D0-\u05EAA-Za-z][\u05D0-\u05EAA-Za-z ]*?)\s+מ\.עקי[ף]?\s+\d+\s+מחלקה/,
-    /([\u05D0-\u05EAA-Za-z][\u05D0-\u05EAA-Za-z ]*?)\s+\d+\s+מחלקה/,
-    // Normal: "מחלקה: 014 שם_מחלקה"
-    /מחלקה:?\s*\d+\s+([\u05D0-\u05EAA-Za-z][\u05D0-\u05EAA-Za-z ]*?)(?=\s{2,}|תחילת|ותק|$)/,
-  ];
-  for (const pat of deptNamePatterns) {
-    const m = t.match(pat);
-    if (m) { deptName = m[1].trim(); break; }
+  // Extract category prefix (מ/ס) and dept name from text near "מחלקה"
+  // Format in reversed text: "[optional extra] [מ|ס].[deptName] [deptNum] מחלקה:"
+  // Examples: "ס.מרינה 011 מחלקה:" | "מ.מנגנון 002 מחלקה:" | "היונים ס.כיכר 017 מחלקה:"
+  let deptPrefix = '';
+  const fullDeptMatch = t.match(/(?:([\u05D0-\u05EA''"A-Za-z]+)\s+)?([מס])\.([\u05D0-\u05EA''"A-Za-z]+)\s+(\d{2,4})\s+מחלקה/);
+  if (fullDeptMatch) {
+    const extraWord = fullDeptMatch[1] || ''; // e.g. "היונים"
+    deptPrefix = fullDeptMatch[2];             // "מ" or "ס"
+    const nameAfterDot = fullDeptMatch[3];     // e.g. "כיכר"
+    deptNum = fullDeptMatch[4];                // e.g. "017"
+    // Combine: "כיכר היונים" (reversed RTL means extra word is second part of name)
+    deptName = extraWord ? `${nameAfterDot} ${extraWord}` : nameAfterDot;
+  }
+
+  // Special case: QUEEN CANS (may not have מ./ס. prefix)
+  if (!deptName && /queen\s*cans/i.test(t)) {
+    deptName = 'QUEEN CANS';
+    const qcNum = t.match(/CANS\s+(\d{2,4})\s+מחלקה/i) || t.match(/מחלקה:?\s*(\d{2,4})\s+.*?QUEEN/i);
+    if (qcNum) deptNum = qcNum[1];
+  }
+
+  // Fallback: try without prefix
+  if (!deptName) {
+    const deptNamePatterns = [
+      /([\u05D0-\u05EAA-Za-z''"]+)\s+\d{2,4}\s+מחלקה/,
+      /מחלקה:?\s*\d{2,4}\s+([\u05D0-\u05EAA-Za-z''"]+)/,
+    ];
+    for (const pat of deptNamePatterns) {
+      const m = t.match(pat);
+      if (m) { deptName = m[1].trim(); break; }
+    }
   }
 
   // Month - e.g. reversed: "03/2026   לחודש   שכר   תלוש"
@@ -977,7 +1009,7 @@ function parsePayslip(text, pageIndex, posItems) {
     }
   }
 
-  deptCat = categorizeDept(deptName);
+  deptCat = categorizeDept(deptName, deptPrefix);
 
   if (!empNumRaw) return null;
 
@@ -997,12 +1029,12 @@ function buildFilename(tmpl, p) {
     .replace(/{מספר_מחלקה}/g, p.deptNum);
 }
 
-function categorizeDept(name) {
-  if (!name) return 'אחר';
-  const n = name.trim();
+function categorizeDept(name, prefix) {
+  if (!name && !prefix) return 'אחר';
+  const n = (name || '').trim();
   if (/queen\s*cans/i.test(n)) return 'קווין קאנס';
-  if (/^מ\./.test(n)) return 'מפעל';
-  if (/^ס\./.test(n)) return 'סניפים';
+  if (prefix === 'מ') return 'מפעל';
+  if (prefix === 'ס') return 'סניפים';
   return 'אחר';
 }
 
@@ -1023,15 +1055,51 @@ function renderPreview() {
     </tr>`;
   });
 
-  // Stats
+  // Stats with filter chips
   const cats = {};
   payslips.forEach(p => { cats[p.deptCat] = (cats[p.deptCat]||0)+1; });
   let statsHtml = `<div class="stat-chip"><strong>${payslips.length}</strong>תלושים</div>`;
   Object.entries(cats).forEach(([k,v]) => {
-    statsHtml += `<div class="stat-chip"><strong>${v}</strong>${k}</div>`;
+    statsHtml += `<div class="stat-chip filterable" onclick="togglePreviewFilter('${k}')" data-cat="${k}"><strong>${v}</strong>${k}</div>`;
   });
   document.getElementById('pdfStats').innerHTML = statsHtml;
   document.getElementById('pdfPreviewWrap').classList.remove('hidden');
+}
+
+let previewFilters = new Set(); // empty = show all
+
+function togglePreviewFilter(cat) {
+  if (previewFilters.has(cat)) {
+    previewFilters.delete(cat);
+  } else {
+    previewFilters.add(cat);
+  }
+  // Update chip styles
+  const chips = document.querySelectorAll('.stat-chip.filterable');
+  chips.forEach(c => {
+    const chipCat = c.dataset.cat;
+    if (previewFilters.size === 0) {
+      c.classList.remove('active', 'dimmed');
+    } else if (previewFilters.has(chipCat)) {
+      c.classList.add('active');
+      c.classList.remove('dimmed');
+    } else {
+      c.classList.remove('active');
+      c.classList.add('dimmed');
+    }
+  });
+  // Filter table rows
+  const rows = document.querySelectorAll('#previewBody tr');
+  rows.forEach(row => {
+    const badge = row.querySelector('.badge');
+    if (!badge) return;
+    const rowCat = badge.textContent.trim();
+    if (previewFilters.size === 0 || previewFilters.has(rowCat)) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
 }
 
 // ─── Mode ────────────────────────────────────────────────────
@@ -1296,6 +1364,8 @@ async function execute() {
 
     if (currentMode === 'dept-auto') {
       await executeDeptAuto();
+    } else if (currentMode === 'review') {
+      await executeReview();
     } else if (currentMode === 'missing') {
       await executeMissing();
     } else {
@@ -1428,6 +1498,53 @@ async function executeDeptAuto() {
   let msg = `${payslips.length} תלושים מחולקים ל-${cats.length} קטגוריות`;
   if (n8nEnabled) msg += ' + employees.csv';
   showResult(msg, blob, `תלושים_לפי_מחלקה_${ts}.zip`);
+}
+
+async function executeReview() {
+  const zip = new JSZip();
+  const { PDFDocument } = PDFLib;
+  const cats = ['מפעל', 'סניפים', 'קווין קאנס', 'אחר'];
+  let total = 0;
+
+  for (const cat of cats) {
+    const catPayslips = payslips.filter(p => p.deptCat === cat);
+    if (!catPayslips.length) continue;
+
+    const catFolder = zip.folder(cat);
+    // Group by department name within this category
+    const deptGroups = {};
+    catPayslips.forEach(p => {
+      const key = p.deptName || 'ללא מחלקה';
+      if (!deptGroups[key]) deptGroups[key] = [];
+      deptGroups[key].push(p);
+    });
+
+    for (const [deptName, group] of Object.entries(deptGroups)) {
+      setProgress(Math.round((total / payslips.length) * 100), `${cat} / ${deptName}...`);
+      const srcDoc = await PDFDocument.load(pdfBytes);
+      const newDoc = await PDFDocument.create();
+      for (const p of group) {
+        const [page] = await newDoc.copyPages(srcDoc, [p.pageIndex]);
+        newDoc.addPage(page);
+        total++;
+      }
+      catFolder.file(`${deptName}.pdf`, await newDoc.save());
+    }
+  }
+
+  if (n8nEnabled) {
+    const emailMap = buildEmailMap();
+    zip.file('employees.csv', buildCsvContent(payslips, emailMap));
+  }
+
+  setProgress(100, 'מסיים...');
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const ts = getTimestamp();
+  const catCount = cats.filter(c => payslips.some(p => p.deptCat === c)).length;
+  const deptCount = new Set(payslips.map(p => p.deptName)).size;
+  let msg = `${payslips.length} תלושים ב-${deptCount} מחלקות, ${catCount} קטגוריות`;
+  if (n8nEnabled) msg += ' + employees.csv';
+  showResult(msg, blob, `בדיקת_תלושים_${ts}.zip`);
 }
 
 async function executeMissing() {
