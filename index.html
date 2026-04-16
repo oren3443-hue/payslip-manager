@@ -1711,8 +1711,13 @@ async function sendToN8n() {
 function downloadBlob(blob, name) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = name; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  // Keep the blob URL alive longer for large files
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 </script>
 </body>
