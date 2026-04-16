@@ -732,9 +732,20 @@
           <textarea class="template-input" id="n8nEmailBody" rows="3" style="direction:rtl;text-align:right;resize:vertical" placeholder="לדוגמה: מצורף תלוש השכר שלך. לשאלות ניתן לפנות למחלקת שכר."></textarea>
         </div>
         <div style="margin-top:14px">
-          <label>כתובת Webhook של n8n (אופציונלי - לשליחה ישירה):</label>
-          <input class="template-input" id="n8nWebhookUrl" placeholder="https://your-n8n.com/webhook/send-payslip" style="direction:ltr;text-align:left">
-          <div class="tip">💡 אם תמלא כתובת webhook, יופיע כפתור "שלח ישירות ל-n8n" ליד כפתור ההורדה</div>
+          <label>שליחה ישירה (אופציונלי):</label>
+          <div class="toggle" style="margin-bottom:10px">
+            <button class="active" onclick="setWebhookMode('n8n',this)">n8n Cloud</button>
+            <button onclick="setWebhookMode('custom',this)">קישור מותאם</button>
+          </div>
+          <div id="webhookN8nWrap">
+            <label style="font-size:0.82rem;color:var(--text3)">שם סביבה:</label>
+            <input class="template-input" type="password" id="n8nEnvName" placeholder="הכנס שם סביבה..." style="direction:ltr;text-align:left">
+            <div class="tip">💡 שם הסביבה משמש גם ככתובת וגם כנתיב - שום דבר לא נחשף בקוד</div>
+          </div>
+          <div id="webhookCustomWrap" class="hidden">
+            <label style="font-size:0.82rem;color:var(--text3)">כתובת Webhook מלאה:</label>
+            <input class="template-input" id="n8nCustomUrl" placeholder="https://your-server.com/webhook/..." style="direction:ltr;text-align:left">
+          </div>
         </div>
         <div class="tip" style="margin-top:10px">💡 יתווסף קובץ employees.csv ל-ZIP עם נושא מייל, גוף הודעה ופרטי שליחה מוכן ל-n8n</div>
       </div>
@@ -1232,6 +1243,25 @@ function selectAllEmps() {
 }
 
 // ─── N8N toggle ──────────────────────────────────────────────
+let webhookMode = 'n8n'; // 'n8n' or 'custom'
+
+function setWebhookMode(mode, btn) {
+  webhookMode = mode;
+  btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('webhookN8nWrap').classList.toggle('hidden', mode !== 'n8n');
+  document.getElementById('webhookCustomWrap').classList.toggle('hidden', mode !== 'custom');
+}
+
+function getWebhookUrl() {
+  if (webhookMode === 'custom') {
+    return (document.getElementById('n8nCustomUrl')?.value || '').trim();
+  }
+  const env = (document.getElementById('n8nEnvName')?.value || '').trim();
+  if (!env) return '';
+  return `https://${env}.app.n8n.cloud/webhook/send-payslip`;
+}
+
 function setN8nMode(enabled, btn) {
   n8nEnabled = enabled;
   btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
@@ -1618,9 +1648,8 @@ async function executeMissing() {
 }
 
 function showResult(msg, blob, filename, secondLabel, secondAction) {
-  const webhookUrl = (document.getElementById('n8nWebhookUrl')?.value || '').trim();
   let btns = `<button class="btn-primary" onclick="downloadBlob(window._lastBlob,'${filename}')">⬇️ הורד ${filename}</button>`;
-  if (n8nEnabled && webhookUrl) {
+  if (n8nEnabled && getWebhookUrl()) {
     btns += `<button class="btn-secondary" id="sendN8nBtn" onclick="sendToN8n()">📧 שלח ישירות ל-n8n</button>`;
   }
   if (secondLabel) btns += `<button class="btn-secondary" id="secondBtn">${secondLabel}</button>`;
@@ -1636,8 +1665,8 @@ function showResult(msg, blob, filename, secondLabel, secondAction) {
 }
 
 async function sendToN8n() {
-  const webhookUrl = (document.getElementById('n8nWebhookUrl')?.value || '').trim();
-  if (!webhookUrl) { alert('נא להזין כתובת webhook'); return; }
+  const webhookUrl = getWebhookUrl();
+  if (!webhookUrl) { alert('נא להזין שם סביבה או כתובת webhook'); return; }
 
   const emailMap = buildEmailMap();
   const tmpl = document.getElementById('filenameTemplate').value;
