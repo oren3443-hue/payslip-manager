@@ -731,6 +731,11 @@
           <label>הערה לגוף המייל (אופציונלי):</label>
           <textarea class="template-input" id="n8nEmailBody" rows="3" style="direction:rtl;text-align:right;resize:vertical" placeholder="לדוגמה: מצורף תלוש השכר שלך. לשאלות ניתן לפנות למחלקת שכר."></textarea>
         </div>
+        <div style="margin-top:14px">
+          <label>כתובת Webhook של n8n (אופציונלי - לשליחה ישירה):</label>
+          <input class="template-input" id="n8nWebhookUrl" placeholder="https://your-n8n.com/webhook/send-payslip" style="direction:ltr;text-align:left">
+          <div class="tip">💡 אם תמלא כתובת webhook, יופיע כפתור "שלח ישירות ל-n8n" ליד כפתור ההורדה</div>
+        </div>
         <div class="tip" style="margin-top:10px">💡 יתווסף קובץ employees.csv ל-ZIP עם נושא מייל, גוף הודעה ופרטי שליחה מוכן ל-n8n</div>
       </div>
     </div>
@@ -1232,6 +1237,18 @@ function setN8nMode(enabled, btn) {
   btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('n8nOptions').classList.toggle('hidden', !enabled);
+
+  // Force split mode when n8n is enabled (merged would send all payslips to one employee)
+  if (enabled && currentMode && mergeMode[currentMode]) {
+    mergeMode[currentMode] = 'split';
+    const panel = document.getElementById('opts-' + currentMode);
+    if (panel) {
+      const toggleBtns = panel.querySelectorAll('.toggle button');
+      toggleBtns.forEach(b => {
+        b.classList.toggle('active', b.textContent.includes('מפוצל'));
+      });
+    }
+  }
 }
 
 function getTimestamp() {
@@ -1601,7 +1618,11 @@ async function executeMissing() {
 }
 
 function showResult(msg, blob, filename, secondLabel, secondAction) {
+  const webhookUrl = (document.getElementById('n8nWebhookUrl')?.value || '').trim();
   let btns = `<button class="btn-primary" onclick="downloadBlob(window._lastBlob,'${filename}')">⬇️ הורד ${filename}</button>`;
+  if (n8nEnabled && webhookUrl) {
+    btns += `<button class="btn-secondary" id="sendN8nBtn" onclick="sendToN8n()">📧 שלח ישירות ל-n8n</button>`;
+  }
   if (secondLabel) btns += `<button class="btn-secondary" id="secondBtn">${secondLabel}</button>`;
   document.getElementById('resultWrap').innerHTML = `
     <div class="result-box">
@@ -1612,6 +1633,79 @@ function showResult(msg, blob, filename, secondLabel, secondAction) {
   if (secondAction) {
     document.getElementById('secondBtn').onclick = secondAction;
   }
+}
+
+async function sendToN8n() {
+  const webhookUrl = (document.getElementById('n8nWebhookUrl')?.value || '').trim();
+  if (!webhookUrl) { alert('נא להזין כתובת webhook'); return; }
+
+  const emailMap = buildEmailMap();
+  const tmpl = document.getElementById('filenameTemplate').value;
+  const body = (document.getElementById('n8nEmailBody')?.value || '').trim();
+  const fromEmail = ''; // will use default in n8n
+
+  // Determine which payslips to send based on current mode/filter
+  let filtered = [...payslips];
+  if (currentMode === 'dept-pick') filtered = payslips.filter(p => selectedDepts.has(p.deptName));
+  else if (currentMode === 'excel') filtered = payslips.filter(p => excelEmpNums.has(p.empNum));
+  else if (currentMode === 'pick') filtered = payslips.filter(p => selectedEmps.has(p.empNum));
+
+  // Only send to employees with email
+  const toSend = filtered.filter(p => emailMap[p.empNum]);
+  const noEmail = filtered.length - toSend.length;
+
+  if (!toSend.length) {
+    alert('אין עובדים עם כתובת מייל לשליחה. ודא שהעלת קובץ אקסל עם מיילים.');
+    return;
+  }
+
+  const btn = document.getElementById('sendN8nBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> שולח...';
+  document.getElementById('progressWrap').classList.remove('hidden');
+
+  let sent = 0, errors = 0;
+
+  for (let i = 0; i < toSend.length; i++) {
+    const p = toSend[i];
+    const fname = buildFilename(tmpl, p) + '.pdf';
+    const subject = `תלוש שכר לחודש ${p.month} לעובד מספר ${p.empNum} ${p.empName}`;
+    const email = emailMap[p.empNum];
+
+    setProgress(Math.round((i / toSend.length) * 100), `שולח: ${p.empName} (${i + 1}/${toSend.length})`);
+
+    try {
+      const pdfData = await extractPage(p.pageIndex);
+      const formData = new FormData();
+      formData.append('data', new Blob([pdfData], { type: 'application/pdf' }), fname);
+      formData.append('email', email);
+      formData.append('name', p.empName);
+      formData.append('subject', subject);
+      formData.append('emailBody', body || 'מצורף תלוש השכר שלך.');
+      formData.append('employeeNumber', p.empNum);
+      formData.append('department', p.deptName);
+      formData.append('month', p.month);
+
+      const resp = await fetch(webhookUrl, { method: 'POST', body: formData });
+      if (resp.ok) sent++;
+      else errors++;
+    } catch (e) {
+      console.error(`Failed to send for ${p.empName}:`, e);
+      errors++;
+    }
+  }
+
+  setProgress(100, 'הושלם');
+  btn.disabled = false;
+  btn.innerHTML = '📧 שלח ישירות ל-n8n';
+
+  let resultMsg = `✅ נשלחו ${sent} תלושים`;
+  if (errors) resultMsg += ` | ⚠️ ${errors} שגיאות`;
+  if (noEmail) resultMsg += ` | ${noEmail} עובדים ללא מייל (לא נשלחו)`;
+  document.getElementById('resultWrap').innerHTML += `
+    <div class="result-box" style="margin-top:10px;${errors ? 'border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.06)' : ''}">
+      <div class="result-info"><strong>${resultMsg}</strong></div>
+    </div>`;
 }
 
 function downloadBlob(blob, name) {
