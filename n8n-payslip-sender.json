@@ -1,0 +1,187 @@
+{
+  "name": "שליחת תלושים - Payslip Sender",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 📑 Payslip Sender\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**שדות שמגיעים ב-body:**\n- `email` (comma-separated recipients)\n- `subject`, `body`, `body_html` (RTL)\n- `send_at`, `send_at_utc`, `schedule_mode`\n- `scope` (employee/manual/category/department)\n- `employee_number`, `name`, `department`, `category`, `month`, `count`\n\n**קובץ מצורף:** `$binary.data`\n\n### אחרי ייבוא:\n1. הגדר Gmail credential ב-Gmail node\n2. Activate את ה-workflow (למעלה בפינה)\n3. ב-HTML → שם סביבה = `orenmeshi`",
+        "height": 340,
+        "width": 380,
+        "color": 4
+      },
+      "id": "sticky-1",
+      "name": "הוראות",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [60, 100]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "send-payslip",
+        "responseMode": "onReceived",
+        "responseData": "firstEntryJson",
+        "responseCode": 200,
+        "options": {
+          "binaryData": true,
+          "rawBody": false
+        }
+      },
+      "id": "webhook-1",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [480, 300],
+      "webhookId": "send-payslip"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Normalize payload: body fields + binary attachment\nconst b = $input.first().json.body || $input.first().json;\nconst binary = $input.first().binary || {};\n\n// Find the first binary property (FormData field 'data')\nconst binaryKey = Object.keys(binary)[0];\nconst file = binaryKey ? binary[binaryKey] : null;\n\n// Split emails by comma/semicolon → clean array\nconst emails = String(b.email || '')\n  .split(/[,;]+/)\n  .map(e => e.trim())\n  .filter(e => /@/.test(e));\n\nreturn [{\n  json: {\n    emails_to: emails.join(', '),\n    emails_array: emails,\n    recipients_count: emails.length,\n    subject: b.subject || 'תלוש שכר',\n    body: b.body || '',\n    body_html: b.body_html || `<div dir=\"rtl\">${b.body || ''}</div>`,\n    scope: b.scope || 'employee',\n    schedule_mode: b.schedule_mode || 'now',\n    send_at: b.send_at || 'now',\n    send_at_utc: b.send_at_utc || 'now',\n    employee_number: b.employee_number || '',\n    name: b.name || '',\n    department: b.department || '',\n    category: b.category || '',\n    month: b.month || '',\n    count: b.count || '',\n    filename: file ? file.fileName : 'attachment.pdf',\n  },\n  binary: binary\n}];"
+      },
+      "id": "code-1",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "cond-scheduled",
+              "leftValue": "={{ $json.schedule_mode }}",
+              "rightValue": "scheduled",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-1",
+      "name": "האם מתוזמן?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [920, 300]
+    },
+    {
+      "parameters": {
+        "resume": "specificTime",
+        "dateTime": "={{ $json.send_at_utc }}",
+        "options": {}
+      },
+      "id": "wait-1",
+      "name": "המתן עד מועד",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [1140, 200],
+      "webhookId": "wait-payslip"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.emails_to }}",
+        "subject": "={{ $json.subject }}",
+        "emailType": "html",
+        "message": "={{ $json.body_html }}",
+        "options": {
+          "attachmentsUi": {
+            "attachmentsBinary": [
+              {
+                "property": "data"
+              }
+            ]
+          },
+          "appendAttribution": false
+        }
+      },
+      "id": "gmail-1",
+      "name": "Gmail - שלח מייל",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1360, 300]
+    },
+    {
+      "parameters": {
+        "content": "### ⚠️ חשוב\n- ה-Webhook עונה מיד (200 OK) — הדפדפן לא מחכה\n- ה-Wait משתמש ב-`send_at_utc` — חד-משמעי ללא TZ\n- אם הגדרת `schedule_mode=now` — הענף העליון לא רץ\n- כפתור 'Execute Workflow' לבדיקה לא יעבוד כי אין binary — תריץ אמיתי מהאתר",
+        "height": 200,
+        "width": 360,
+        "color": 5
+      },
+      "id": "sticky-2",
+      "name": "הערות",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1140, 480]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "האם מתוזמן?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "האם מתוזמן?": {
+      "main": [
+        [
+          {
+            "node": "המתן עד מועד",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Gmail - שלח מייל",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "המתן עד מועד": {
+      "main": [
+        [
+          {
+            "node": "Gmail - שלח מייל",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

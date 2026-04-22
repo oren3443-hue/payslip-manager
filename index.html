@@ -495,6 +495,113 @@
   .stat-chip.filterable:hover { border-color: var(--accent); }
   .stat-chip.filterable.active { border-color: var(--accent); background: rgba(79,127,255,0.15); }
   .stat-chip.filterable.dimmed { opacity: 0.35; }
+
+  /* Chip input (manual emails) */
+  .chip-input-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    min-height: 40px;
+  }
+  .chip-input-wrap:focus-within { border-color: var(--accent); }
+  .chip-input-wrap .email-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(79,127,255,0.15);
+    color: var(--accent);
+    border: 1px solid rgba(79,127,255,0.35);
+    border-radius: 14px;
+    padding: 3px 4px 3px 10px;
+    font-size: 0.8rem;
+    direction: ltr;
+    max-width: 100%;
+    word-break: break-all;
+  }
+  .chip-input-wrap .email-chip.invalid {
+    background: rgba(248,113,113,0.12);
+    color: var(--danger);
+    border-color: rgba(248,113,113,0.35);
+  }
+  .chip-input-wrap .email-chip button {
+    background: rgba(255,255,255,0.08);
+    border: none;
+    color: inherit;
+    border-radius: 50%;
+    width: 18px; height: 18px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .chip-input-wrap .email-chip button:hover { background: rgba(255,255,255,0.18); }
+  .chip-input-wrap input.chip-input-field {
+    flex: 1;
+    min-width: 140px;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    outline: none;
+    padding: 4px 6px;
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.85rem;
+    direction: ltr;
+    text-align: left;
+  }
+
+  /* Per-scope email panels */
+  .scope-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+  }
+  .scope-item-label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .scope-item-label .count-pill {
+    background: var(--border);
+    color: var(--text2);
+    border-radius: 10px;
+    padding: 1px 8px;
+    font-size: 0.72rem;
+    font-weight: 500;
+  }
+
+  /* Schedule block */
+  .schedule-wrap { margin-top: 14px; }
+  .datetime-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .datetime-row input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: var(--text);
+    font-family: 'Heebo', sans-serif;
+    font-size: 0.88rem;
+    outline: none;
+    color-scheme: dark;
+  }
+  .datetime-row input:focus { border-color: var(--accent); }
+  .schedule-error {
+    color: var(--danger);
+    font-size: 0.78rem;
+    margin-top: 6px;
+    display: none;
+  }
+  .schedule-error.show { display: block; }
 </style>
 </head>
 <body>
@@ -583,7 +690,15 @@
       </div>
 
       <!-- Options panels -->
-      <div id="opts-all" class="options-panel hidden"></div>
+      <div id="opts-all" class="options-panel hidden">
+        <div class="toggle-row">
+          <span class="toggle-label">סוג קובץ פלט:</span>
+          <div class="toggle">
+            <button onclick="setMerge('all','merged',this)">מחובר</button>
+            <button class="active" onclick="setMerge('all','split',this)">מפוצל</button>
+          </div>
+        </div>
+      </div>
 
       <div id="opts-dept-auto" class="options-panel hidden">
         <div class="toggle-row">
@@ -709,28 +824,36 @@
         </div>
       </div>
       <div id="n8nOptions" class="hidden">
-        <label>העלה קובץ אקסל עם פרטי עובדים (כולל מייל):</label>
-        <div class="inline-upload" id="emailExcelZone">
-          <input type="file" accept=".xlsx,.xls,.csv" id="emailExcelInput" onchange="loadEmailExcel(this)">
-          <span>📊</span>
-          <span id="emailExcelLabel">לחץ לבחירת קובץ Excel</span>
+        <!-- Dynamic scope config (populated by renderN8nConfig) -->
+        <div id="n8nScopeConfig"></div>
+
+        <div style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <label style="margin:0">הערה לגוף המייל (אופציונלי):</label>
+            <button class="btn-secondary" style="padding:4px 12px;font-size:0.78rem" onclick="previewEmail()">👁️ תצוגה מקדימה</button>
+          </div>
+          <textarea class="template-input" id="n8nEmailBody" rows="3" style="direction:rtl;text-align:right;resize:vertical" placeholder="לדוגמה: מצורף תלוש השכר שלך. לשאלות ניתן לפנות למחלקת שכר."></textarea>
+          <div class="tip">💡 המייל יישלח בעיצוב מלא עם RTL, כותרת, פרטי עובד וכפתור קובץ מצורף</div>
         </div>
-        <div id="emailColWrap" class="hidden" style="margin-top:12px">
-          <div class="flex-row">
-            <div>
-              <label>עמודת מספר עובד:</label>
-              <select class="select-styled" id="emailEmpCol"></select>
-            </div>
-            <div>
-              <label>עמודת מייל:</label>
-              <select class="select-styled" id="emailMailCol"></select>
+
+        <!-- Scheduling -->
+        <div class="schedule-wrap">
+          <div class="toggle-row" style="margin-bottom:6px">
+            <span class="toggle-label">מועד שליחה:</span>
+            <div class="toggle">
+              <button class="active" onclick="setScheduleMode('now',this)">עכשיו</button>
+              <button onclick="setScheduleMode('scheduled',this)">מתוזמן</button>
             </div>
           </div>
+          <div id="scheduleDatetimeWrap" class="hidden">
+            <div class="datetime-row">
+              <input type="datetime-local" id="scheduleDatetime" oninput="validateSchedule()">
+            </div>
+            <div class="tip">💡 שעון מקומי - חייב להיות עתידי</div>
+            <div class="schedule-error" id="scheduleError">⚠️ השעה שנבחרה צריכה להיות בעתיד</div>
+          </div>
         </div>
-        <div style="margin-top:14px">
-          <label>הערה לגוף המייל (אופציונלי):</label>
-          <textarea class="template-input" id="n8nEmailBody" rows="3" style="direction:rtl;text-align:right;resize:vertical" placeholder="לדוגמה: מצורף תלוש השכר שלך. לשאלות ניתן לפנות למחלקת שכר."></textarea>
-        </div>
+
         <div style="margin-top:14px">
           <label>שליחה ישירה (אופציונלי):</label>
           <div class="toggle" style="margin-bottom:10px">
@@ -739,15 +862,15 @@
           </div>
           <div id="webhookN8nWrap">
             <label style="font-size:0.82rem;color:var(--text3)">שם סביבה:</label>
-            <input class="template-input" type="password" id="n8nEnvName" placeholder="הכנס שם סביבה..." style="direction:ltr;text-align:left">
-            <div class="tip">💡 שם הסביבה משמש גם ככתובת וגם כנתיב - שום דבר לא נחשף בקוד</div>
+            <input class="template-input" type="password" id="n8nEnvName" placeholder="הכנס שם סביבה..." autocomplete="new-password" name="n8n-env-unique-no-autofill" style="direction:ltr;text-align:left" oninput="updateWebhookPreview()">
+            <div class="tip" id="webhookPreviewHint">💡 רק שם הסביבה (למשל "orenmeshi") — ללא .app.n8n.cloud</div>
           </div>
           <div id="webhookCustomWrap" class="hidden">
             <label style="font-size:0.82rem;color:var(--text3)">כתובת Webhook מלאה:</label>
             <input class="template-input" id="n8nCustomUrl" placeholder="https://your-server.com/webhook/..." style="direction:ltr;text-align:left">
           </div>
         </div>
-        <div class="tip" style="margin-top:10px">💡 יתווסף קובץ employees.csv ל-ZIP עם נושא מייל, גוף הודעה ופרטי שליחה מוכן ל-n8n</div>
+        <div class="tip" style="margin-top:10px">💡 יתווסף קובץ employees.csv ל-ZIP עם נושא מייל, גוף הודעה, מועד שליחה ופרטי נמענים</div>
       </div>
     </div>
   </div>
@@ -777,7 +900,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs
 let pdfBytes = null;
 let payslips = []; // [{pageIndex, empNum, empName, dept, deptNum, deptCat, month, idNum}]
 let currentMode = null;
-let mergeMode = { 'dept-auto': 'merged', 'dept-pick': 'merged', 'excel': 'merged', 'pick': 'merged' };
+let mergeMode = { 'all': 'split', 'dept-auto': 'merged', 'dept-pick': 'merged', 'excel': 'merged', 'pick': 'merged' };
 let selectedDepts = new Set();
 let selectedEmps = new Set();
 let excelEmpNums = new Set();
@@ -785,6 +908,16 @@ let excelColIndex = null;
 let emailData = []; // [{empNum, email, name}]
 let missingData = [];
 let n8nEnabled = false;
+
+// n8n email scope state
+let n8nEmails = {
+  manual: [],          // list of emails for 'manual' scope
+  byCategory: {},      // {cat: [emails]} for 'category' scope
+  byDepartment: {}     // {deptName: [emails]} for 'department' scope
+};
+
+// Scheduling state
+let scheduleMode = 'now'; // 'now' | 'scheduled'
 
 // ─── PDF Upload ───────────────────────────────────────────────
 document.getElementById('pdfInput').addEventListener('change', e => {
@@ -1027,12 +1160,31 @@ function parsePayslip(text, pageIndex, posItems) {
 
   deptCat = categorizeDept(deptName, deptPrefix);
 
+  // Net amount — prefer "לתשלום" (actual bank transfer) over "שכר נטו" (pre-optional-deductions).
+  // Hebrew PDFs often have reversed RTL extraction: "17597.00 לתשלום" instead of "לתשלום: 17597.00".
+  let netAmount = null;
+  const netPatterns = [
+    // "לתשלום" as standalone word (not לתשלומים) — this is the actual net
+    /([\d,]+\.\d{2})\s+לתשלום(?![א-ת])/,
+    /לתשלום(?![א-ת])[:\s]+([\d,]+\.\d{2})/,
+    // Fallback: שכר נטו (net before optional deductions)
+    /([\d,]+\.\d{2})\s+(?:שכר\s+)?נטו(?:\s+שכר)?/,
+    /(?:שכר\s+)?נטו(?:\s+שכר)?[:\s]+([\d,]+\.\d{2})/
+  ];
+  for (const pat of netPatterns) {
+    const m = t.match(pat);
+    if (m) {
+      const v = parseFloat(m[1].replace(/,/g, ''));
+      if (v > 0 && v < 1000000) { netAmount = v; break; }
+    }
+  }
+
   if (!empNumRaw) return null;
 
   // Remove leading zeros for matching, keep raw for filename
   const empNum = String(parseInt(empNumRaw, 10));
 
-  return { pageIndex, empNum, empNumRaw, empName, deptNum, deptName, deptCat, month, idNum };
+  return { pageIndex, empNum, empNumRaw, empName, deptNum, deptName, deptCat, month, idNum, netAmount };
 }
 
 function buildFilename(tmpl, p) {
@@ -1132,6 +1284,7 @@ function setMode(mode) {
 
   updateTemplateVisibility();
   updateFilenameTip();
+  if (n8nEnabled) renderN8nConfig();
 }
 
 function setMerge(mode, val, btn) {
@@ -1139,6 +1292,7 @@ function setMerge(mode, val, btn) {
   btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   updateTemplateVisibility();
+  if (n8nEnabled) renderN8nConfig();
 }
 
 function updateTemplateVisibility() {
@@ -1182,6 +1336,7 @@ function toggleDept(d, cb) {
   if (cb.checked) selectedDepts.add(d);
   else selectedDepts.delete(d);
   cb.closest('.dept-chip').classList.toggle('selected', cb.checked);
+  if (n8nEnabled && getN8nScope() === 'department') renderN8nConfig();
 }
 
 function selectAllDepts() {
@@ -1193,6 +1348,7 @@ function selectAllDepts() {
     allDepts.forEach(d => selectedDepts.add(d));
   }
   renderDeptChips();
+  if (n8nEnabled && getN8nScope() === 'department') renderN8nConfig();
 }
 
 // ─── Employee list ────────────────────────────────────────────
@@ -1257,9 +1413,28 @@ function getWebhookUrl() {
   if (webhookMode === 'custom') {
     return (document.getElementById('n8nCustomUrl')?.value || '').trim();
   }
-  const env = (document.getElementById('n8nEnvName')?.value || '').trim();
+  let env = (document.getElementById('n8nEnvName')?.value || '').trim();
+  if (!env) return '';
+  // Be forgiving: accept full URL, partial domain, or just the env name.
+  env = env
+    .replace(/^https?:\/\//i, '')        // strip protocol
+    .replace(/\/.*$/, '')                // strip any path
+    .replace(/\.app\.n8n\.cloud$/i, '')  // strip domain suffix
+    .replace(/\s+/g, '')                 // strip whitespace
+    .toLowerCase();
   if (!env) return '';
   return `https://${env}.app.n8n.cloud/webhook/send-payslip`;
+}
+
+function updateWebhookPreview() {
+  const hint = document.getElementById('webhookPreviewHint');
+  if (!hint) return;
+  const url = getWebhookUrl();
+  if (webhookMode === 'n8n' && url) {
+    hint.innerHTML = `✅ URL: <code style="direction:ltr;font-family:monospace;font-size:0.72rem;color:var(--accent)">${url}</code>`;
+  } else {
+    hint.innerHTML = '💡 רק שם הסביבה (למשל "orenmeshi") — ללא .app.n8n.cloud';
+  }
 }
 
 function setN8nMode(enabled, btn) {
@@ -1267,18 +1442,472 @@ function setN8nMode(enabled, btn) {
   btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.getElementById('n8nOptions').classList.toggle('hidden', !enabled);
+  if (enabled) renderN8nConfig();
+}
 
-  // Force split mode when n8n is enabled (merged would send all payslips to one employee)
-  if (enabled && currentMode && mergeMode[currentMode]) {
-    mergeMode[currentMode] = 'split';
-    const panel = document.getElementById('opts-' + currentMode);
-    if (panel) {
-      const toggleBtns = panel.querySelectorAll('.toggle button');
-      toggleBtns.forEach(b => {
-        b.classList.toggle('active', b.textContent.includes('מפוצל'));
-      });
-    }
+// ─── n8n scope inference ─────────────────────────────────────
+function getN8nScope() {
+  if (!currentMode) return null;
+  if (currentMode === 'missing') return 'manual';
+  if (currentMode === 'review') return 'category';
+  const merge = mergeMode[currentMode];
+  if (currentMode === 'dept-auto' && merge === 'merged') return 'category';
+  if (currentMode === 'dept-pick' && merge === 'merged') return 'department';
+  if (['all','excel','pick'].includes(currentMode) && merge === 'merged') return 'manual';
+  return 'employee'; // any split mode
+}
+
+function getCategoriesInData() {
+  return ['מפעל','סניפים','קווין קאנס','אחר'].filter(c => payslips.some(p => p.deptCat === c));
+}
+
+// ─── Chip input (manual emails) ──────────────────────────────
+function isValidEmail(e) { return /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(e); }
+
+function renderChipInput(listKey, containerId, placeholder = 'הוסף מייל (Enter או פסיק להוספה)...') {
+  const arr = getEmailArray(listKey);
+  const chipsHtml = arr.map((e,i) => `
+    <span class="email-chip${isValidEmail(e) ? '' : ' invalid'}">
+      ${escapeHtml(e)}
+      <button type="button" onclick="removeChip('${encodeKey(listKey)}',${i})" title="הסר">✕</button>
+    </span>`).join('');
+  return `
+    <div class="chip-input-wrap" onclick="this.querySelector('input').focus()">
+      ${chipsHtml}
+      <input class="chip-input-field" placeholder="${escapeHtml(placeholder)}"
+        onkeydown="chipKeydown(event,'${encodeKey(listKey)}')"
+        onblur="chipFlush(this,'${encodeKey(listKey)}')"
+        oninput="chipInput(event,'${encodeKey(listKey)}')">
+    </div>`;
+}
+
+function encodeKey(key) { return btoa(unescape(encodeURIComponent(key))); }
+function decodeKey(enc) { return decodeURIComponent(escape(atob(enc))); }
+
+function getEmailArray(key) {
+  if (key === 'manual') return n8nEmails.manual;
+  if (key.startsWith('cat:')) {
+    const c = key.slice(4);
+    if (!n8nEmails.byCategory[c]) n8nEmails.byCategory[c] = [];
+    return n8nEmails.byCategory[c];
   }
+  if (key.startsWith('dept:')) {
+    const d = key.slice(5);
+    if (!n8nEmails.byDepartment[d]) n8nEmails.byDepartment[d] = [];
+    return n8nEmails.byDepartment[d];
+  }
+  return [];
+}
+
+function addChip(key, value) {
+  const v = (value || '').trim().replace(/[,;]+$/, '');
+  if (!v) return false;
+  const arr = getEmailArray(key);
+  if (arr.includes(v)) return true;
+  arr.push(v);
+  return true;
+}
+
+function removeChip(encKey, idx) {
+  const key = decodeKey(encKey);
+  const arr = getEmailArray(key);
+  arr.splice(idx, 1);
+  renderN8nConfig();
+}
+
+function chipKeydown(e, encKey) {
+  const key = decodeKey(encKey);
+  const input = e.target;
+  if (e.key === 'Enter' || e.key === ',' || e.key === ';') {
+    e.preventDefault();
+    if (addChip(key, input.value)) { input.value = ''; renderN8nConfig(); }
+  } else if (e.key === 'Backspace' && !input.value) {
+    const arr = getEmailArray(key);
+    if (arr.length) { arr.pop(); renderN8nConfig(); }
+  }
+}
+
+function chipInput(e, encKey) {
+  const key = decodeKey(encKey);
+  const v = e.target.value;
+  // Flush on comma/semicolon typed or pasted
+  if (/[,;]/.test(v)) {
+    const parts = v.split(/[,;]+/);
+    const tail = parts.pop();
+    let added = false;
+    parts.forEach(p => { if (addChip(key, p)) added = true; });
+    e.target.value = tail;
+    if (added) renderN8nConfig();
+  }
+}
+
+function chipFlush(input, encKey) {
+  const key = decodeKey(encKey);
+  if (addChip(key, input.value)) { input.value = ''; renderN8nConfig(); }
+}
+
+// ─── Scope renderer ──────────────────────────────────────────
+function renderN8nConfig() {
+  const container = document.getElementById('n8nScopeConfig');
+  if (!container || !n8nEnabled) return;
+  const scope = getN8nScope();
+  if (!scope) { container.innerHTML = '<div class="tip">💡 בחר קודם פעולה בשלב 2</div>'; return; }
+
+  if (scope === 'employee') {
+    container.innerHTML = `
+      <label>העלה קובץ אקסל עם פרטי עובדים (כולל מייל):</label>
+      <div class="inline-upload" id="emailExcelZone">
+        <input type="file" accept=".xlsx,.xls,.csv" id="emailExcelInput" onchange="loadEmailExcel(this)">
+        <span>📊</span>
+        <span id="emailExcelLabel">${window._emailExcelData ? '✓ נטען' : 'לחץ לבחירת קובץ Excel'}</span>
+      </div>
+      <div id="emailColWrap" class="${window._emailExcelData ? '' : 'hidden'}" style="margin-top:12px">
+        <div class="flex-row">
+          <div>
+            <label>עמודת מספר עובד:</label>
+            <select class="select-styled" id="emailEmpCol"></select>
+          </div>
+          <div>
+            <label>עמודת מייל:</label>
+            <select class="select-styled" id="emailMailCol"></select>
+          </div>
+        </div>
+      </div>
+      <div class="tip" style="margin-top:10px">💡 כל עובד יקבל את התלוש שלו למייל הרשום באקסל</div>`;
+    // Re-populate selects if we have data
+    if (window._emailExcelData) populateEmailCols(window._emailExcelData);
+    if (window._emailExcelData) {
+      document.getElementById('emailExcelZone').classList.add('done');
+    }
+    return;
+  }
+
+  if (scope === 'manual') {
+    const msg = currentMode === 'missing'
+      ? '💡 קובץ XLSX של חסרי מייל יישלח לנמענים הנבחרים (למשל אחראי שכר / HR)'
+      : '💡 קובץ ה-PDF המחובר יישלח לכל הנמענים ברשימה';
+    container.innerHTML = `
+      <label>מיילים לשליחה:</label>
+      ${renderChipInput('manual', 'manual-chips')}
+      <div class="tip" style="margin-top:8px">${msg}</div>`;
+    return;
+  }
+
+  if (scope === 'category') {
+    const cats = getCategoriesInData();
+    if (!cats.length) { container.innerHTML = '<div class="tip">💡 אין קטגוריות בנתונים</div>'; return; }
+    const rows = cats.map(c => {
+      const count = payslips.filter(p => p.deptCat === c).length;
+      return `
+        <div class="scope-item">
+          <div class="scope-item-label">📁 ${c} <span class="count-pill">${count} תלושים</span></div>
+          ${renderChipInput('cat:' + c)}
+        </div>`;
+    }).join('');
+    container.innerHTML = `<label style="margin-bottom:10px">מייל לכל קטגוריה:</label>${rows}`;
+    return;
+  }
+
+  if (scope === 'department') {
+    const depts = [...selectedDepts];
+    if (!depts.length) { container.innerHTML = '<div class="tip">⚠️ בחר קודם מחלקות בשלב 2</div>'; return; }
+    const rows = depts.map(d => {
+      const count = payslips.filter(p => p.deptName === d).length;
+      return `
+        <div class="scope-item">
+          <div class="scope-item-label">🏢 ${d} <span class="count-pill">${count} תלושים</span></div>
+          ${renderChipInput('dept:' + d)}
+        </div>`;
+    }).join('');
+    container.innerHTML = `<label style="margin-bottom:10px">מייל לכל מחלקה:</label>${rows}`;
+    return;
+  }
+}
+
+function populateEmailCols(data) {
+  const headers = data[0] || [];
+  const empSel = document.getElementById('emailEmpCol');
+  const mailSel = document.getElementById('emailMailCol');
+  if (!empSel || !mailSel) return;
+  const opts = headers.map((h,i) => `<option value="${i}">${h || 'עמודה '+(i+1)}</option>`).join('');
+  empSel.innerHTML = opts; mailSel.innerHTML = opts;
+  headers.forEach((h,i) => {
+    if (/עובד|emp/i.test(String(h))) empSel.value = i;
+    if (/מייל|mail|email|דוא/i.test(String(h))) mailSel.value = i;
+  });
+}
+
+// ─── Scheduling ──────────────────────────────────────────────
+function setScheduleMode(mode, btn) {
+  scheduleMode = mode;
+  btn.closest('.toggle').querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('scheduleDatetimeWrap').classList.toggle('hidden', mode !== 'scheduled');
+  if (mode === 'scheduled') {
+    const inp = document.getElementById('scheduleDatetime');
+    if (!inp.value) {
+      const d = new Date(Date.now() + 60*60*1000); // default +1h
+      inp.value = toLocalDatetimeValue(d);
+    }
+    validateSchedule();
+  } else {
+    document.getElementById('scheduleError').classList.remove('show');
+  }
+}
+
+function toLocalDatetimeValue(d) {
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function validateSchedule() {
+  if (scheduleMode !== 'scheduled') return true;
+  const v = document.getElementById('scheduleDatetime')?.value;
+  const err = document.getElementById('scheduleError');
+  if (!v) { err.classList.add('show'); return false; }
+  const picked = new Date(v);
+  const ok = picked.getTime() > Date.now();
+  err.classList.toggle('show', !ok);
+  return ok;
+}
+
+function getSendAt() {
+  // returns 'now' or full ISO string with TZ offset (e.g. 2026-04-23T15:30:00+03:00)
+  if (scheduleMode === 'now') return 'now';
+  const v = document.getElementById('scheduleDatetime')?.value;
+  if (!v) return 'now';
+  // datetime-local gives local wall-clock; build a Date from it and compute offset
+  const [datePart, timePart] = v.split('T');
+  const [Y, M, D] = datePart.split('-').map(Number);
+  const [h, m] = timePart.split(':').map(Number);
+  const d = new Date(Y, M - 1, D, h, m, 0);
+  const offMin = -d.getTimezoneOffset();
+  const sign = offMin >= 0 ? '+' : '-';
+  const abs = Math.abs(offMin);
+  const offHH = String(Math.floor(abs / 60)).padStart(2, '0');
+  const offMM = String(abs % 60).padStart(2, '0');
+  return `${v}:00${sign}${offHH}:${offMM}`;
+}
+
+function getSendAtUtc() {
+  // ISO UTC for n8n compatibility (Z suffix)
+  if (scheduleMode === 'now') return 'now';
+  const v = document.getElementById('scheduleDatetime')?.value;
+  if (!v) return 'now';
+  const [datePart, timePart] = v.split('T');
+  const [Y, M, D] = datePart.split('-').map(Number);
+  const [h, m] = timePart.split(':').map(Number);
+  return new Date(Y, M - 1, D, h, m, 0).toISOString();
+}
+
+// ─── Body HTML wrapper (RTL) ─────────────────────────────────
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function wrapBodyRtl(bodyText) {
+  const safe = escapeHtml(bodyText || 'מצורף תלוש השכר שלך.').replace(/\n/g, '<br>');
+  return `<div dir="rtl" style="text-align:right;font-family:Arial,'Segoe UI',sans-serif;font-size:14px;line-height:1.6">${safe}</div>`;
+}
+
+// OREN MESHI brand logo (base64 PNG, embedded for email-client compatibility)
+const OM_LOGO_DATAURL = 'data:image/png;base64,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';
+
+function previewEmail() {
+  const body = (document.getElementById('n8nEmailBody')?.value || '').trim();
+  const scope = getN8nScope() || 'employee';
+  // Build a sample task per scope for preview
+  let sample;
+  if (scope === 'employee') {
+    sample = { extra: { name: 'ישראל ישראלי', employee_number: '0245', department: 'מנגנון', category: 'מפעל', month: '03-2026', net_amount: 17597 } };
+  } else if (scope === 'category') {
+    sample = { extra: { category: 'מפעל', count: '12' } };
+  } else if (scope === 'department') {
+    sample = { extra: { department: 'מרינה', count: '8' } };
+  } else {
+    sample = { extra: { count: '15' } };
+  }
+  const html = buildEmailHtml(body, sample, scope);
+  const w = window.open('', '_blank', 'width=720,height=820');
+  if (!w) { alert('החסימה של חלונות קופצים פעילה — אפשר popups לאתר כדי לראות תצוגה מקדימה'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+// OREN MESHI email template — "Hero card" style (modern, bold headline, dark hero card)
+function buildEmailHtml(bodyText, task, scope) {
+  const userText = escapeHtml(bodyText || '').replace(/\n/g, '<br>');
+  const extra = (task && task.extra) || {};
+
+  const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  function formatMonth(m) {
+    if (!m) return '';
+    const mm = String(m).match(/(\d{1,2})[\-\/](\d{4})/);
+    if (!mm) return String(m);
+    const idx = parseInt(mm[1], 10) - 1;
+    return `${HE_MONTHS[idx] || mm[1]} ${mm[2]}`;
+  }
+
+  function formatCurrency(n) {
+    if (n == null || isNaN(n)) return '';
+    const num = Number(n);
+    // Hebrew convention: number then ₪ (e.g. "17,597.00 ₪")
+    return num.toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₪';
+  }
+
+  let headline, emoji, subtitle;
+  let heroLabel, heroValue, heroSubValue;
+
+  if (scope === 'employee') {
+    const first = (extra.name || '').split(/\s+/)[0];
+    headline = first ? `שלום ${first}` : 'שלום רב';
+    emoji = '👋';
+    const monthFmt = formatMonth(extra.month);
+    subtitle = monthFmt
+      ? `התלוש שלך לחודש ${monthFmt} מצורף להודעה.`
+      : 'התלוש שלך מצורף להודעה.';
+    // Prefer net amount; fallback to month
+    if (extra.net_amount) {
+      heroLabel = 'סכום הנטו שהועבר לחשבונכם';
+      heroValue = formatCurrency(extra.net_amount);
+      heroSubValue = monthFmt || '';
+    } else {
+      heroLabel = 'תלוש לחודש';
+      heroValue = monthFmt || 'חודש נוכחי';
+      heroSubValue = '';
+    }
+  } else if (scope === 'category') {
+    headline = 'תלושים מוכנים לבדיקה';
+    emoji = '📋';
+    subtitle = extra.count
+      ? `מצורפים ${extra.count} תלושים בקטגוריית ${extra.category || ''} לצפייה ובדיקה.`
+      : `תלושי קטגוריית ${extra.category || ''} מצורפים לצפייה ובדיקה.`;
+    heroLabel = 'קטגוריה';
+    heroValue = extra.category || '';
+    heroSubValue = extra.count ? `${extra.count} תלושים` : '';
+  } else if (scope === 'department') {
+    headline = 'תלושים מוכנים לבדיקה';
+    emoji = '📋';
+    subtitle = extra.count
+      ? `מצורפים ${extra.count} תלושים של מחלקת ${extra.department || ''}.`
+      : `תלושי מחלקת ${extra.department || ''} מצורפים לצפייה.`;
+    heroLabel = 'מחלקה';
+    heroValue = extra.department || '';
+    heroSubValue = extra.count ? `${extra.count} תלושים` : '';
+  } else {
+    headline = 'תלושי שכר מוכנים';
+    emoji = '📑';
+    subtitle = extra.count
+      ? `מצורפים ${extra.count} תלושים לצפייה.`
+      : 'התלושים מצורפים להודעה.';
+    heroLabel = 'סה״כ תלושים';
+    heroValue = extra.count || '';
+    heroSubValue = '';
+  }
+
+  // Small employee context line (above hero) — only for employee scope with relevant data
+  const empMetaItems = scope === 'employee' ? [
+    extra.employee_number && `מס׳ עובד ${extra.employee_number}`,
+    extra.department && `מחלקה ${extra.department}`
+  ].filter(Boolean) : [];
+  const empMetaLine = empMetaItems.length ? `
+      <tr><td style="padding:0 48px 22px;text-align:center;direction:rtl">
+        <div class="om-muted" style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:11px;color:#94A3B8;letter-spacing:0.08em">
+          ${empMetaItems.map(m => escapeHtml(m)).join(' &nbsp;·&nbsp; ')}
+        </div>
+      </td></tr>` : '';
+
+  return `<!DOCTYPE html>
+<html dir="rtl" lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>${escapeHtml(headline)}</title>
+<style>
+  @media (prefers-color-scheme: dark) {
+    body, .om-bg { background:#0F172A !important; color:#E2E8F0 !important; }
+    .om-card { background:#1E293B !important; }
+    .om-headline { color:#F1F5F9 !important; }
+    .om-subtle { color:#94A3B8 !important; }
+    .om-muted { color:#64748B !important; }
+    .om-hero { background:#0F172A !important; background:linear-gradient(135deg,#0F172A 0%,#1E293B 100%) !important; }
+    .om-accent-line { background:#6FCBBE !important; }
+    .om-footer { background:#111827 !important; }
+    .om-footer-brand { color:#F1F5F9 !important; }
+    .om-footer-tagline { color:#94A3B8 !important; }
+  }
+  @media only screen and (max-width:600px) {
+    .om-container { padding:20px 8px !important; }
+    .om-card-inner { padding:36px 28px 0 !important; }
+    .om-hero-cell { padding:36px 22px !important; }
+    .om-hero-value { font-size:32px !important; }
+    .om-headline { font-size:24px !important; }
+  }
+</style>
+</head>
+<body class="om-bg" style="margin:0;padding:0;background:#F3F1EC;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,Helvetica,sans-serif;direction:rtl;color:#1F2937">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" class="om-bg om-container" style="background:#F3F1EC;padding:36px 12px">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" border="0" role="presentation" class="om-card" style="max-width:600px;width:100%;background:#FFFFFF;border-radius:20px;overflow:hidden">
+
+      <!-- Headline with emoji -->
+      <tr><td class="om-card-inner" style="padding:52px 48px 10px;text-align:center;direction:rtl">
+        <div class="om-headline" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:28px;color:#1F2937;font-weight:800;line-height:1.25;letter-spacing:-0.01em">
+          ${escapeHtml(headline)} <span style="display:inline-block">${emoji}</span>
+        </div>
+      </td></tr>
+
+      <!-- Teal accent line (brand color) -->
+      <tr><td style="padding:18px 48px 0;text-align:center">
+        <div class="om-accent-line" style="display:inline-block;width:40px;height:2px;background:#6FCBBE;line-height:0;font-size:0">&nbsp;</div>
+      </td></tr>
+
+      <!-- Subtitle -->
+      <tr><td style="padding:18px 56px 28px;text-align:center;direction:rtl">
+        <div class="om-subtle" style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:15px;color:#64748B;line-height:1.7">
+          ${escapeHtml(subtitle)}
+        </div>
+      </td></tr>
+
+      ${empMetaLine}
+
+      <!-- Hero card (dark, with net amount) -->
+      <tr><td style="padding:0 32px 28px">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" bgcolor="#1F2937" class="om-hero" style="background:#1F2937;background:linear-gradient(135deg,#1F2937 0%,#2D3B54 100%);border-radius:16px">
+          <tr><td class="om-hero-cell" style="padding:44px 36px;text-align:center;direction:rtl">
+            <div style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:13px;color:#94A3B8;letter-spacing:0.08em;margin-bottom:14px;font-weight:500">${escapeHtml(heroLabel)}</div>
+            <div class="om-hero-value" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;font-size:40px;color:#FFFFFF;font-weight:800;line-height:1.1;letter-spacing:-0.01em;direction:rtl">${escapeHtml(heroValue)}</div>
+            ${heroSubValue ? `<div style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:13px;color:#94A3B8;margin-top:14px;letter-spacing:0.04em">${escapeHtml(heroSubValue)}</div>` : ''}
+          </td></tr>
+        </table>
+      </td></tr>
+
+      <!-- Attachment note (soft, not a button) -->
+      <tr><td style="padding:4px 48px 14px;text-align:center;direction:rtl">
+        <div class="om-subtle" style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:13px;color:#64748B;letter-spacing:0.02em">
+          📎 התלוש מצורף להודעה זו כקובץ PDF
+        </div>
+      </td></tr>
+
+      <!-- Fine print -->
+      <tr><td style="padding:0 48px 40px;text-align:center;direction:rtl">
+        <div class="om-muted" style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:11px;color:#94A3B8;line-height:1.6">
+          לבירורים ניתן להשיב להודעה זו
+        </div>
+      </td></tr>
+
+      <!-- Footer — prominent brand stamp -->
+      <tr><td bgcolor="#F3F1EC" class="om-footer" style="background:#F3F1EC;padding:44px 48px 48px;text-align:center;direction:rtl">
+        <div class="om-footer-brand" style="font-family:Georgia,'Times New Roman',Times,serif;font-size:26px;color:#1F2937;font-weight:400;letter-spacing:0.28em;line-height:1">OREN MESHI</div>
+        <div class="om-footer-tagline" style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:11px;color:#64748B;letter-spacing:0.42em;margin-top:14px;text-transform:uppercase">לחם · פטיסרי · קפה</div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body>
+</html>`;
 }
 
 function getTimestamp() {
@@ -1289,8 +1918,11 @@ function getTimestamp() {
 function buildEmailMap() {
   const excelData = window._emailExcelData;
   if (!excelData) return {};
-  const empCol = parseInt(document.getElementById('emailEmpCol').value);
-  const mailCol = parseInt(document.getElementById('emailMailCol').value);
+  const empColEl = document.getElementById('emailEmpCol');
+  const mailColEl = document.getElementById('emailMailCol');
+  if (!empColEl || !mailColEl) return {};
+  const empCol = parseInt(empColEl.value);
+  const mailCol = parseInt(mailColEl.value);
   const map = {};
   excelData.slice(1).forEach(row => {
     const num = String(parseInt(String(row[empCol]||'').trim()) || '');
@@ -1300,16 +1932,52 @@ function buildEmailMap() {
   return map;
 }
 
-function buildCsvContent(filtered, emailMap) {
+function buildCsvContent(filtered) {
+  const body = (document.getElementById('n8nEmailBody')?.value || '').trim();
+  const bodyHtml = wrapBodyRtl(body);
+  const sendAt = getSendAt();
+  const scope = getN8nScope();
+  const header = ['scope','emails','employee_number','name','department','category','month','filename','subject','body','body_html','send_at'];
+  const rows = [header];
   const tmpl = document.getElementById('filenameTemplate').value;
-  const body = (document.getElementById('n8nEmailBody').value || '').trim();
-  const rows = [['employee_number','name','email','department','month','filename','subject','body']];
-  filtered.forEach(p => {
-    const fname = buildFilename(tmpl, p) + '.pdf';
-    const email = emailMap[p.empNum] || '';
-    const subject = `תלוש שכר לחודש ${p.month} לעובד מספר ${p.empNum} ${p.empName}`;
-    rows.push([p.empNum, p.empName, email, p.deptName, p.month, fname, subject, body]);
-  });
+
+  if (scope === 'employee') {
+    const emailMap = buildEmailMap();
+    filtered.forEach(p => {
+      const fname = buildFilename(tmpl, p) + '.pdf';
+      const subject = `תלוש שכר לחודש ${p.month} לעובד מספר ${p.empNum} ${p.empName}`;
+      rows.push([scope, emailMap[p.empNum] || '', p.empNum, p.empName, p.deptName, p.deptCat, p.month, fname, subject, body, bodyHtml, sendAt]);
+    });
+  } else if (scope === 'manual') {
+    const emails = n8nEmails.manual.join(';');
+    if (currentMode === 'missing') {
+      rows.push([scope, emails, '', '', '', '', '', 'חסרי_מייל.xlsx', 'רשימת עובדים חסרי מייל', body, bodyHtml, sendAt]);
+    } else {
+      rows.push([scope, emails, '', '', '', '', '', 'תלושים_מחוברים.pdf', `תלושי שכר - ${filtered.length} תלושים`, body, bodyHtml, sendAt]);
+    }
+  } else if (scope === 'category') {
+    if (currentMode === 'review') {
+      getCategoriesInData().forEach(cat => {
+        const emails = (n8nEmails.byCategory[cat] || []).join(';');
+        const catPayslips = filtered.filter(p => p.deptCat === cat);
+        const deptGroups = {};
+        catPayslips.forEach(p => { (deptGroups[p.deptName] = deptGroups[p.deptName] || []).push(p); });
+        Object.entries(deptGroups).forEach(([deptName]) => {
+          rows.push([scope, emails, '', '', deptName, cat, '', `${deptName}.pdf`, `תלושים לבדיקה: ${cat} / ${deptName}`, body, bodyHtml, sendAt]);
+        });
+      });
+    } else {
+      getCategoriesInData().forEach(cat => {
+        const emails = (n8nEmails.byCategory[cat] || []).join(';');
+        rows.push([scope, emails, '', '', '', cat, '', `${cat}.pdf`, `תלושי שכר - ${cat}`, body, bodyHtml, sendAt]);
+      });
+    }
+  } else if (scope === 'department') {
+    [...selectedDepts].forEach(deptName => {
+      const emails = (n8nEmails.byDepartment[deptName] || []).join(';');
+      rows.push([scope, emails, '', '', deptName, '', '', `${deptName}.pdf`, `תלושי שכר - ${deptName}`, body, bodyHtml, sendAt]);
+    });
+  }
   return '\uFEFF' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
 }
 
@@ -1347,20 +2015,14 @@ async function loadEmailExcel(input) {
     const wb = XLSX.read(e.target.result, { type: 'array' });
     const ws = wb.Sheets[wb.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
-    const headers = data[0] || [];
-    const empSel = document.getElementById('emailEmpCol');
-    const mailSel = document.getElementById('emailMailCol');
-    const opts = headers.map((h,i) => `<option value="${i}">${h || 'עמודה '+(i+1)}</option>`).join('');
-    empSel.innerHTML = opts; mailSel.innerHTML = opts;
-    // Auto-detect
-    headers.forEach((h,i) => {
-      if (/עובד|emp/i.test(h)) empSel.value = i;
-      if (/מייל|mail|email|דוא/i.test(h)) mailSel.value = i;
-    });
-    document.getElementById('emailColWrap').classList.remove('hidden');
-    document.getElementById('emailExcelZone').classList.add('done');
-    document.getElementById('emailExcelLabel').textContent = '✓ ' + file.name;
     window._emailExcelData = data;
+    populateEmailCols(data);
+    const colWrap = document.getElementById('emailColWrap');
+    if (colWrap) colWrap.classList.remove('hidden');
+    const zone = document.getElementById('emailExcelZone');
+    if (zone) zone.classList.add('done');
+    const label = document.getElementById('emailExcelLabel');
+    if (label) label.textContent = '✓ ' + file.name;
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1416,7 +2078,7 @@ async function execute() {
     } else if (currentMode === 'missing') {
       await executeMissing();
     } else {
-      const isSplit = currentMode === 'all' || mergeMode[currentMode] === 'split';
+      const isSplit = mergeMode[currentMode] === 'split';
       if (isSplit) {
         await executeSplit(filtered);
       } else {
@@ -1464,8 +2126,7 @@ async function executeSplit(filtered) {
     zip.file(fname, bytes);
   }
   if (n8nEnabled) {
-    const emailMap = buildEmailMap();
-    zip.file('employees.csv', buildCsvContent(filtered, emailMap));
+    zip.file('employees.csv', buildCsvContent(filtered));
   }
   setProgress(100, 'מסיים...');
   const blob = await zip.generateAsync({ type: 'blob' });
@@ -1492,8 +2153,7 @@ async function executeMerged(filtered, name) {
     // Wrap in ZIP with CSV
     const zip = new JSZip();
     zip.file(name + '.pdf', pdfBytesOut);
-    const emailMap = buildEmailMap();
-    zip.file('employees.csv', buildCsvContent(filtered, emailMap));
+    zip.file('employees.csv', buildCsvContent(filtered));
     const blob = await zip.generateAsync({ type: 'blob' });
     showResult(`${filtered.length} תלושים מחוברים + employees.csv`, blob, `${name}_${ts}.zip`);
   } else {
@@ -1536,8 +2196,7 @@ async function executeDeptAuto() {
   }
 
   if (n8nEnabled) {
-    const emailMap = buildEmailMap();
-    zip.file('employees.csv', buildCsvContent(payslips, emailMap));
+    zip.file('employees.csv', buildCsvContent(payslips));
   }
   setProgress(100, 'מסיים...');
   const blob = await zip.generateAsync({ type: 'blob' });
@@ -1580,8 +2239,7 @@ async function executeReview() {
   }
 
   if (n8nEnabled) {
-    const emailMap = buildEmailMap();
-    zip.file('employees.csv', buildCsvContent(payslips, emailMap));
+    zip.file('employees.csv', buildCsvContent(payslips));
   }
 
   setProgress(100, 'מסיים...');
@@ -1664,63 +2322,229 @@ function showResult(msg, blob, filename, secondLabel, secondAction) {
   }
 }
 
+// ─── Build payslip filter by current mode ────────────────────
+function getCurrentFiltered() {
+  if (currentMode === 'dept-pick') return payslips.filter(p => selectedDepts.has(p.deptName));
+  if (currentMode === 'excel')     return payslips.filter(p => excelEmpNums.has(p.empNum));
+  if (currentMode === 'pick')      return payslips.filter(p => selectedEmps.has(p.empNum));
+  return [...payslips];
+}
+
+// ─── Merge multiple payslips into one PDF ────────────────────
+async function mergePayslipsToPdf(list) {
+  const { PDFDocument } = PDFLib;
+  const srcDoc = await PDFDocument.load(pdfBytes);
+  const newDoc = await PDFDocument.create();
+  const pages = await newDoc.copyPages(srcDoc, list.map(p => p.pageIndex));
+  pages.forEach(pg => newDoc.addPage(pg));
+  return newDoc.save();
+}
+
+// ─── Build per-scope send tasks ──────────────────────────────
+async function buildSendTasks() {
+  const scope = getN8nScope();
+  const tmpl = document.getElementById('filenameTemplate').value;
+  const filtered = getCurrentFiltered();
+  const tasks = [];
+
+  if (scope === 'employee') {
+    const emailMap = buildEmailMap();
+    for (const p of filtered) {
+      const email = emailMap[p.empNum];
+      if (!email) continue;
+      tasks.push({
+        emails: [email],
+        pdfBytes: await extractPage(p.pageIndex),
+        filename: buildFilename(tmpl, p) + '.pdf',
+        subject: `תלוש שכר לחודש ${p.month} לעובד מספר ${p.empNum} ${p.empName}`,
+        extra: { employee_number: p.empNum, name: p.empName, department: p.deptName, category: p.deptCat, month: p.month, net_amount: p.netAmount }
+      });
+    }
+    return { tasks, skipped: filtered.length - tasks.length };
+  }
+
+  if (scope === 'manual') {
+    const emails = n8nEmails.manual.filter(isValidEmail);
+    if (!emails.length) return { tasks: [], skipped: 0, error: 'לא הוזנו מיילים תקינים' };
+    if (currentMode === 'missing') {
+      const excelData = window._missingExcelData;
+      if (!excelData) return { tasks: [], skipped: 0, error: 'נא להעלות קובץ אקסל של חסרי מייל' };
+      const empCol = parseInt(document.getElementById('missingEmpCol').value);
+      const mailCol = parseInt(document.getElementById('missingMailCol').value);
+      const emailMap = {};
+      excelData.slice(1).forEach(row => {
+        const num = String(row[empCol]||'').trim().replace(/\.0$/,'');
+        emailMap[num] = String(row[mailCol]||'').trim();
+      });
+      const missing = payslips.filter(p => !emailMap[p.empNum] || !emailMap[p.empNum].trim());
+      const rows = [['מספר עובד','שם עובד','מחלקה','חודש']];
+      missing.forEach(p => rows.push([p.empNum, p.empName, p.deptName, p.month]));
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'חסרי מייל');
+      const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+      tasks.push({
+        emails,
+        pdfBytes: bytes,
+        filename: 'חסרי_מייל.xlsx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        subject: `רשימת עובדים חסרי מייל (${missing.length} עובדים)`,
+        extra: { missing_count: String(missing.length) }
+      });
+      return { tasks, skipped: 0 };
+    }
+    // all/excel/pick merged → merged PDF to manual emails
+    if (!filtered.length) return { tasks: [], skipped: 0, error: 'אין תלושים לשליחה' };
+    tasks.push({
+      emails,
+      pdfBytes: await mergePayslipsToPdf(filtered),
+      filename: 'תלושים_מחוברים.pdf',
+      subject: `תלושי שכר - ${filtered.length} תלושים`,
+      extra: { count: String(filtered.length) }
+    });
+    return { tasks, skipped: 0 };
+  }
+
+  if (scope === 'category') {
+    for (const cat of getCategoriesInData()) {
+      const emails = (n8nEmails.byCategory[cat] || []).filter(isValidEmail);
+      if (!emails.length) continue;
+      const catPayslips = filtered.filter(p => p.deptCat === cat);
+      if (!catPayslips.length) continue;
+
+      if (currentMode === 'review') {
+        // One send per department in the category
+        const deptGroups = {};
+        catPayslips.forEach(p => { (deptGroups[p.deptName || 'ללא מחלקה'] = deptGroups[p.deptName || 'ללא מחלקה'] || []).push(p); });
+        for (const [deptName, group] of Object.entries(deptGroups)) {
+          tasks.push({
+            emails,
+            pdfBytes: await mergePayslipsToPdf(group),
+            filename: `${deptName}.pdf`,
+            subject: `תלושים לבדיקה: ${cat} / ${deptName}`,
+            extra: { category: cat, department: deptName, count: String(group.length) }
+          });
+        }
+      } else {
+        // dept-auto merged: one PDF per category
+        tasks.push({
+          emails,
+          pdfBytes: await mergePayslipsToPdf(catPayslips),
+          filename: `${cat}.pdf`,
+          subject: `תלושי שכר - ${cat}`,
+          extra: { category: cat, count: String(catPayslips.length) }
+        });
+      }
+    }
+    return { tasks, skipped: 0 };
+  }
+
+  if (scope === 'department') {
+    for (const deptName of selectedDepts) {
+      const emails = (n8nEmails.byDepartment[deptName] || []).filter(isValidEmail);
+      if (!emails.length) continue;
+      const deptPayslips = filtered.filter(p => p.deptName === deptName);
+      if (!deptPayslips.length) continue;
+      tasks.push({
+        emails,
+        pdfBytes: await mergePayslipsToPdf(deptPayslips),
+        filename: `${deptName}.pdf`,
+        subject: `תלושי שכר - ${deptName}`,
+        extra: { department: deptName, count: String(deptPayslips.length) }
+      });
+    }
+    return { tasks, skipped: 0 };
+  }
+
+  return { tasks: [], skipped: 0, error: 'scope לא מזוהה' };
+}
+
 async function sendToN8n() {
   const webhookUrl = getWebhookUrl();
   if (!webhookUrl) { alert('נא להזין שם סביבה או כתובת webhook'); return; }
 
-  const emailMap = buildEmailMap();
-  const tmpl = document.getElementById('filenameTemplate').value;
+  if (!validateSchedule()) { alert('מועד השליחה המתוזמן חייב להיות בעתיד'); return; }
+
   const body = (document.getElementById('n8nEmailBody')?.value || '').trim();
-  const fromEmail = ''; // will use default in n8n
-
-  // Determine which payslips to send based on current mode/filter
-  let filtered = [...payslips];
-  if (currentMode === 'dept-pick') filtered = payslips.filter(p => selectedDepts.has(p.deptName));
-  else if (currentMode === 'excel') filtered = payslips.filter(p => excelEmpNums.has(p.empNum));
-  else if (currentMode === 'pick') filtered = payslips.filter(p => selectedEmps.has(p.empNum));
-
-  // Only send to employees with email
-  const toSend = filtered.filter(p => emailMap[p.empNum]);
-  const noEmail = filtered.length - toSend.length;
-
-  if (!toSend.length) {
-    alert('אין עובדים עם כתובת מייל לשליחה. ודא שהעלת קובץ אקסל עם מיילים.');
-    return;
-  }
+  const sendAt = getSendAt();
+  const sendAtUtc = getSendAtUtc();
+  const scope = getN8nScope();
 
   const btn = document.getElementById('sendN8nBtn');
   btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> מכין...';
+
+  let built;
+  try {
+    built = await buildSendTasks();
+  } catch (e) {
+    console.error(e);
+    btn.disabled = false;
+    btn.innerHTML = '📧 שלח ישירות ל-n8n';
+    alert('שגיאה בהכנת המשימות: ' + e.message);
+    return;
+  }
+
+  const { tasks, skipped = 0, error } = built;
+  if (error) { btn.disabled = false; btn.innerHTML = '📧 שלח ישירות ל-n8n'; alert(error); return; }
+  if (!tasks.length) { btn.disabled = false; btn.innerHTML = '📧 שלח ישירות ל-n8n'; alert('אין למי לשלוח. הזן מיילים או העלה קובץ אקסל.'); return; }
+
   btn.innerHTML = '<span class="spinner"></span> שולח...';
   document.getElementById('progressWrap').classList.remove('hidden');
 
-  let sent = 0, errors = 0;
-
-  for (let i = 0; i < toSend.length; i++) {
-    const p = toSend[i];
-    const fname = buildFilename(tmpl, p) + '.pdf';
-    const subject = `תלוש שכר לחודש ${p.month} לעובד מספר ${p.empNum} ${p.empName}`;
-    const email = emailMap[p.empNum];
-
-    setProgress(Math.round((i / toSend.length) * 100), `שולח: ${p.empName} (${i + 1}/${toSend.length})`);
-
+  let totalSent = 0, totalFailed = 0, totalScheduled = 0, httpErrors = 0;
+  const failureDetails = [];
+  for (let i = 0; i < tasks.length; i++) {
+    const t = tasks[i];
+    setProgress(Math.round((i / tasks.length) * 100), `שולח: ${t.filename} (${i + 1}/${tasks.length})`);
     try {
-      const pdfData = await extractPage(p.pageIndex);
-      const formData = new FormData();
-      formData.append('data', new Blob([pdfData], { type: 'application/pdf' }), fname);
-      formData.append('email', email);
-      formData.append('name', p.empName);
-      formData.append('subject', subject);
-      formData.append('emailBody', body || 'מצורף תלוש השכר שלך.');
-      formData.append('employeeNumber', p.empNum);
-      formData.append('department', p.deptName);
-      formData.append('month', p.month);
+      const bodyHtml = buildEmailHtml(body, t, scope);
+      const form = new FormData();
+      form.append('data', new Blob([t.pdfBytes], { type: t.mimeType || 'application/pdf' }), t.filename);
+      form.append('email', t.emails.join(','));
+      form.append('recipients_count', String(t.emails.length));
+      form.append('subject', t.subject);
+      form.append('body', body || 'מצורף תלוש השכר שלך.');
+      form.append('body_html', bodyHtml);
+      form.append('send_at', sendAt);
+      form.append('send_at_utc', sendAtUtc);
+      form.append('schedule_mode', scheduleMode);
+      form.append('scope', scope);
+      Object.entries(t.extra || {}).forEach(([k,v]) => form.append(k, v));
 
-      const resp = await fetch(webhookUrl, { method: 'POST', body: formData });
-      if (resp.ok) sent++;
-      else errors++;
+      const resp = await fetch(webhookUrl, { method: 'POST', body: form });
+      if (!resp.ok) {
+        httpErrors++;
+        failureDetails.push(`${t.filename}: HTTP ${resp.status}`);
+        continue;
+      }
+      // Parse n8n response: { status, sent?, failed?, failures?, recipients_count?, send_at_utc? }
+      let result = null;
+      try { result = await resp.json(); } catch (_) { /* non-JSON response */ }
+      if (!result || typeof result !== 'object') {
+        // Fallback: assume all succeeded
+        totalSent += t.emails.length;
+      } else if (result.status === 'scheduled') {
+        totalScheduled += Number(result.recipients_count || t.emails.length);
+      } else if (result.status === 'sent' || result.status === 'partial') {
+        totalSent += Number(result.sent || 0);
+        totalFailed += Number(result.failed || 0);
+        if (Array.isArray(result.failures)) {
+          result.failures.slice(0, 5).forEach(f => {
+            failureDetails.push(`${f.email || 'unknown'}: ${f.error || 'error'}`);
+          });
+        }
+      } else if (result.status === 'error') {
+        totalFailed += t.emails.length;
+        failureDetails.push(`${t.filename}: ${result.message || 'error'}`);
+      } else {
+        // Unknown response — optimistic
+        totalSent += t.emails.length;
+      }
     } catch (e) {
-      console.error(`Failed to send for ${p.empName}:`, e);
-      errors++;
+      console.error(`Failed to send ${t.filename}:`, e);
+      httpErrors++;
+      failureDetails.push(`${t.filename}: ${e.message || 'network error'}`);
     }
   }
 
@@ -1728,12 +2552,30 @@ async function sendToN8n() {
   btn.disabled = false;
   btn.innerHTML = '📧 שלח ישירות ל-n8n';
 
-  let resultMsg = `✅ נשלחו ${sent} תלושים`;
-  if (errors) resultMsg += ` | ⚠️ ${errors} שגיאות`;
-  if (noEmail) resultMsg += ` | ${noEmail} עובדים ללא מייל (לא נשלחו)`;
+  const anyFail = totalFailed > 0 || httpErrors > 0;
+  const chips = [];
+  if (totalScheduled) chips.push(`📅 תוזמנו ${totalScheduled}`);
+  if (totalSent) chips.push(`✅ נשלחו ${totalSent}`);
+  if (totalFailed) chips.push(`❌ נכשלו ${totalFailed}`);
+  if (httpErrors) chips.push(`⚠️ שגיאת רשת/webhook (${httpErrors})`);
+  if (skipped) chips.push(`${skipped} עובדים ללא מייל (לא נשלחו)`);
+  if (sendAt !== 'now' && totalScheduled) chips.push(`מועד: ${sendAt}`);
+
+  const failuresHtml = failureDetails.length ? `
+    <details style="margin-top:8px;font-size:0.82rem;color:var(--text2)">
+      <summary style="cursor:pointer;color:var(--danger)">פירוט שגיאות (${failureDetails.length})</summary>
+      <ul style="margin:6px 20px 0;padding:0;line-height:1.6">
+        ${failureDetails.map(f => `<li style="font-family:monospace;font-size:0.78rem;direction:ltr;text-align:left">${escapeHtml(f)}</li>`).join('')}
+      </ul>
+    </details>` : '';
+
+  const boxStyle = anyFail
+    ? 'border-color:rgba(248,113,113,0.35);background:rgba(248,113,113,0.07)'
+    : (totalScheduled && !totalSent ? 'border-color:rgba(251,191,36,0.35);background:rgba(251,191,36,0.07)' : '');
+
   document.getElementById('resultWrap').innerHTML += `
-    <div class="result-box" style="margin-top:10px;${errors ? 'border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.06)' : ''}">
-      <div class="result-info"><strong>${resultMsg}</strong></div>
+    <div class="result-box" style="margin-top:10px;${boxStyle}">
+      <div class="result-info"><strong>${chips.join(' · ') || 'הושלם'}</strong>${failuresHtml}</div>
     </div>`;
 }
 

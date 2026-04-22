@@ -1,2 +1,7 @@
 *.pdf
+*.xlsx
+*.png
 .DS_Store
+.claude/
+om-logo-base64-clean.txt
+index 4.html
