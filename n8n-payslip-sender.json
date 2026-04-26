@@ -3,45 +3,43 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 📑 Payslip Sender\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**שדות שמגיעים ב-body:**\n- `email` (comma-separated recipients)\n- `subject`, `body`, `body_html` (RTL)\n- `send_at`, `send_at_utc`, `schedule_mode`\n- `scope` (employee/manual/category/department)\n- `employee_number`, `name`, `department`, `category`, `month`, `count`\n\n**קובץ מצורף:** `$binary.data`\n\n### אחרי ייבוא:\n1. הגדר Gmail credential ב-Gmail node\n2. Activate את ה-workflow (למעלה בפינה)\n3. ב-HTML → שם סביבה = `orenmeshi`",
-        "height": 340,
-        "width": 380,
+        "content": "## 📑 Payslip Sender\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**אימות:** Header Auth מובנה ב-Webhook node — n8n דוחה בקשות לא מורשות ב-403 לפני שמתחילה זרימה (ללא ניצול execution quota).\n\n**שדות שמגיעים ב-body:**\n- `email` (comma-separated recipients)\n- `subject`, `body`, `body_html` (RTL)\n- `send_at`, `send_at_utc`, `schedule_mode`\n- `scope`, `employee_number`, `name`, `department`, `category`, `month`, `count`\n\n**קובץ מצורף:** `$binary.data`\n\n### אחרי ייבוא:\n1. **צור Credential של Header Auth:**\n   - Credentials → Create New → Header Auth\n   - Name (header): `X-Webhook-Secret`\n   - Value: מפתח אקראי חזק (`openssl rand -hex 24`)\n2. **קשר אותו ל-Webhook node** (שדה Credential for Header Auth).\n3. הגדר Microsoft Outlook / Gmail credential ב-'Send a message'.\n4. Activate את ה-workflow.\n5. ב-HTML הזן: `שם-סביבה=אותו-מפתח` (למשל `orenmeshi=<secret>`).",
+        "height": 460,
+        "width": 420,
         "color": 4
       },
       "id": "sticky-1",
       "name": "הוראות",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [60, 100]
+      "position": [40, 60]
     },
     {
       "parameters": {
         "httpMethod": "POST",
         "path": "send-payslip",
-        "responseMode": "onReceived",
-        "responseData": "firstEntryJson",
-        "responseCode": 200,
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
         "options": {
-          "binaryData": true,
           "rawBody": false
         }
       },
-      "id": "webhook-1",
-      "name": "Webhook",
+      "id": "1481da40-7567-497c-ad51-dbe6e5c3cbe8",
+      "name": "Webhook1",
       "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1.1,
-      "position": [480, 300],
+      "typeVersion": 2.1,
+      "position": [656, -656],
       "webhookId": "send-payslip"
     },
     {
       "parameters": {
-        "jsCode": "// Normalize payload: body fields + binary attachment\nconst b = $input.first().json.body || $input.first().json;\nconst binary = $input.first().binary || {};\n\n// Find the first binary property (FormData field 'data')\nconst binaryKey = Object.keys(binary)[0];\nconst file = binaryKey ? binary[binaryKey] : null;\n\n// Split emails by comma/semicolon → clean array\nconst emails = String(b.email || '')\n  .split(/[,;]+/)\n  .map(e => e.trim())\n  .filter(e => /@/.test(e));\n\nreturn [{\n  json: {\n    emails_to: emails.join(', '),\n    emails_array: emails,\n    recipients_count: emails.length,\n    subject: b.subject || 'תלוש שכר',\n    body: b.body || '',\n    body_html: b.body_html || `<div dir=\"rtl\">${b.body || ''}</div>`,\n    scope: b.scope || 'employee',\n    schedule_mode: b.schedule_mode || 'now',\n    send_at: b.send_at || 'now',\n    send_at_utc: b.send_at_utc || 'now',\n    employee_number: b.employee_number || '',\n    name: b.name || '',\n    department: b.department || '',\n    category: b.category || '',\n    month: b.month || '',\n    count: b.count || '',\n    filename: file ? file.fileName : 'attachment.pdf',\n  },\n  binary: binary\n}];"
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst binary = $input.first().binary || {};\nconst binaryKey = Object.keys(binary)[0];\nconst file = binaryKey ? binary[binaryKey] : null;\n\nconst emails = String(b.email || '')\n  .split(/[,;]+/)\n  .map(e => e.trim())\n  .filter(e => /@/.test(e));\n\nreturn [{\n  json: {\n    emails_array: emails,\n    recipients_count: emails.length,\n    subject: b.subject || 'תלוש שכר',\n    body: b.body || '',\n    body_html: b.body_html || ('<div dir=\"rtl\">' + (b.body || '') + '</div>'),\n    scope: b.scope || 'employee',\n    schedule_mode: b.schedule_mode || 'now',\n    send_at: b.send_at || 'now',\n    send_at_utc: b.send_at_utc || 'now',\n    employee_number: b.employee_number || '',\n    name: b.name || '',\n    department: b.department || '',\n    category: b.category || '',\n    month: b.month || '',\n    count: b.count || '',\n    filename: file ? file.fileName : 'attachment.pdf',\n  },\n  binary: binary\n}];"
       },
-      "id": "code-1",
+      "id": "9a4b99a2-bcb2-4fd5-8189-735a221b5531",
       "name": "Normalize",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [700, 300]
+      "position": [864, -656]
     },
     {
       "parameters": {
@@ -49,11 +47,12 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose"
+            "typeValidation": "loose",
+            "version": 1
           },
           "conditions": [
             {
-              "id": "cond-scheduled",
+              "id": "cond-scheduled-1",
               "leftValue": "={{ $json.schedule_mode }}",
               "rightValue": "scheduled",
               "operator": {
@@ -66,64 +65,143 @@
         },
         "options": {}
       },
-      "id": "if-1",
+      "id": "05442ecd-7f7b-440d-9cc4-c51e62b6b040",
       "name": "האם מתוזמן?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2,
-      "position": [920, 300]
+      "typeVersion": 2.2,
+      "position": [1088, -656]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"scheduled\", \"send_at_utc\": $json.send_at_utc, \"recipients_count\": $json.recipients_count, \"scope\": $json.scope } }}",
+        "options": {}
+      },
+      "id": "533894b6-7002-4792-b0c7-2cc67890a222",
+      "name": "Respond Scheduled",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [1200, -880]
     },
     {
       "parameters": {
         "resume": "specificTime",
-        "dateTime": "={{ $json.send_at_utc }}",
-        "options": {}
+        "dateTime": "={{ $json.send_at_utc }}"
       },
-      "id": "wait-1",
+      "id": "687d3e07-d57b-4a26-930c-473dce57b353",
       "name": "המתן עד מועד",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
-      "position": [1140, 200],
+      "position": [1424, -768],
       "webhookId": "wait-payslip"
     },
     {
       "parameters": {
-        "sendTo": "={{ $json.emails_to }}",
-        "subject": "={{ $json.subject }}",
-        "emailType": "html",
-        "message": "={{ $json.body_html }}",
+        "fieldToSplitOut": "emails_array",
+        "include": "allOtherFields",
         "options": {
-          "attachmentsUi": {
-            "attachmentsBinary": [
-              {
-                "property": "data"
-              }
-            ]
-          },
-          "appendAttribution": false
+          "destinationFieldName": "current_email",
+          "includeBinary": true
         }
       },
-      "id": "gmail-1",
-      "name": "Gmail - שלח מייל",
-      "type": "n8n-nodes-base.gmail",
-      "typeVersion": 2.1,
-      "position": [1360, 300]
+      "id": "c29786a1-ade1-42e2-b369-6f0b8921a7bb",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1648, -688]
     },
     {
       "parameters": {
-        "content": "### ⚠️ חשוב\n- ה-Webhook עונה מיד (200 OK) — הדפדפן לא מחכה\n- ה-Wait משתמש ב-`send_at_utc` — חד-משמעי ללא TZ\n- אם הגדרת `schedule_mode=now` — הענף העליון לא רץ\n- כפתור 'Execute Workflow' לבדיקה לא יעבוד כי אין binary — תריץ אמיתי מהאתר",
-        "height": 200,
-        "width": 360,
+        "toRecipients": "={{ $json.current_email }}",
+        "subject": "={{ $json.subject }}",
+        "bodyContent": "={{ $json.body_html }}",
+        "additionalFields": {
+          "attachments": {
+            "attachments": [
+              {
+                "binaryPropertyName": "data"
+              }
+            ]
+          },
+          "bodyContentType": "html",
+          "replyTo": "oren@orenmeshi.com"
+        }
+      },
+      "id": "79cc9a90-3432-42e4-8c9a-aff6e51c5ca0",
+      "name": "Send a message",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [1872, -672],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst failed = items.filter(i => i.json.error || i.error).map(i => ({\n  email: i.json.current_email || 'unknown',\n  error: String((i.json.error && i.json.error.message) || (i.error && i.error.message) || 'unknown error')\n}));\nconst sent = items.length - failed.length;\nreturn [{\n  json: {\n    status: failed.length === 0 ? 'sent' : (sent === 0 ? 'error' : 'partial'),\n    sent: sent,\n    failed: failed.length,\n    total: items.length,\n    failures: failed,\n    schedule_mode: (items[0] && items[0].json && items[0].json.schedule_mode) || 'now'\n  }\n}];"
+      },
+      "id": "01e999be-9e5d-45e3-911e-d64624a17a8c",
+      "name": "Aggregate Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2096, -672]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-scheduled-2",
+              "leftValue": "={{ $json.schedule_mode }}",
+              "rightValue": "scheduled",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d4b4b65c-4e05-45c7-88ea-4dbeaa277589",
+      "name": "כבר הגיב?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [2320, -672]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": $json.status, \"sent\": $json.sent, \"failed\": $json.failed, \"total\": $json.total, \"failures\": $json.failures } }}",
+        "options": {}
+      },
+      "id": "d3b7e33b-7a85-45b5-a61a-c58ed7a71158",
+      "name": "Respond Sent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [2544, -560]
+    },
+    {
+      "parameters": {
+        "content": "### ⚠️ הערות\n- אימות ה-header נעשה ע\"י n8n **לפני** הפעלת הזרימה — מי שלא שולח header נכון מקבל 403 ולא צורך execution quota.\n- ה-Webhook משתמש ב-`responseNode` — הזרימה חייבת להחזיר דרך `Respond Scheduled` או `Respond Sent`.\n- ה-Wait משתמש ב-`send_at_utc` — חד-משמעי ללא TZ.\n- אל תכניס את המפתח לקובץ ה-JSON שב-git! המפתח חי רק ב-credential וב-HTML המקומי.",
+        "height": 240,
+        "width": 420,
         "color": 5
       },
       "id": "sticky-2",
       "name": "הערות",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1140, 480]
+      "position": [1424, -400]
     }
   ],
   "connections": {
-    "Webhook": {
+    "Webhook1": {
       "main": [
         [
           {
@@ -149,14 +227,25 @@
       "main": [
         [
           {
-            "node": "המתן עד מועד",
+            "node": "Respond Scheduled",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "Gmail - שלח מייל",
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Scheduled": {
+      "main": [
+        [
+          {
+            "node": "המתן עד מועד",
             "type": "main",
             "index": 0
           }
@@ -167,7 +256,52 @@
       "main": [
         [
           {
-            "node": "Gmail - שלח מייל",
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "כבר הגיב?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "כבר הגיב?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Respond Sent",
             "type": "main",
             "index": 0
           }

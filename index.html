@@ -862,9 +862,9 @@
             <button onclick="setWebhookMode('custom',this)">קישור מותאם</button>
           </div>
           <div id="webhookN8nWrap">
-            <label style="font-size:0.82rem;color:var(--text3)">שם סביבה:</label>
-            <input class="template-input" type="password" id="n8nEnvName" placeholder="הכנס שם סביבה..." autocomplete="new-password" name="n8n-env-unique-no-autofill" style="direction:ltr;text-align:left" oninput="updateWebhookPreview()">
-            <div class="tip" id="webhookPreviewHint">💡 רק שם הסביבה (למשל "orenmeshi") — ללא .app.n8n.cloud</div>
+            <label style="font-size:0.82rem;color:var(--text3)">קוד שליחה (סביבה=מפתח סודי):</label>
+            <input class="template-input" type="password" id="n8nEnvName" placeholder="orenmeshi=your-secret-token" autocomplete="new-password" name="n8n-env-unique-no-autofill" style="direction:ltr;text-align:left" oninput="updateWebhookPreview()">
+            <div class="tip" id="webhookPreviewHint">💡 פורמט: <code style="direction:ltr">שם-סביבה=מפתח-סודי</code> — המפתח נשלח כ-header לאימות ב-n8n</div>
           </div>
           <div id="webhookCustomWrap" class="hidden">
             <label style="font-size:0.82rem;color:var(--text3)">כתובת Webhook מלאה:</label>
@@ -1410,31 +1410,49 @@ function setWebhookMode(mode, btn) {
   document.getElementById('webhookCustomWrap').classList.toggle('hidden', mode !== 'custom');
 }
 
+// Parse "env=secret" code format. Split on first "=" (secret may contain "=").
+// Accepts bare env (back-compat, no secret) or full URLs that get normalized.
+function parseN8nCode() {
+  const raw = (document.getElementById('n8nEnvName')?.value || '').trim();
+  if (!raw) return { env: '', secret: '' };
+  const eq = raw.indexOf('=');
+  let envPart = eq === -1 ? raw : raw.slice(0, eq);
+  const secret = eq === -1 ? '' : raw.slice(eq + 1).trim();
+  envPart = envPart
+    .replace(/^https?:\/\//i, '')
+    .replace(/\/.*$/, '')
+    .replace(/\.app\.n8n\.cloud$/i, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
+  return { env: envPart, secret };
+}
+
 function getWebhookUrl() {
   if (webhookMode === 'custom') {
     return (document.getElementById('n8nCustomUrl')?.value || '').trim();
   }
-  let env = (document.getElementById('n8nEnvName')?.value || '').trim();
-  if (!env) return '';
-  // Be forgiving: accept full URL, partial domain, or just the env name.
-  env = env
-    .replace(/^https?:\/\//i, '')        // strip protocol
-    .replace(/\/.*$/, '')                // strip any path
-    .replace(/\.app\.n8n\.cloud$/i, '')  // strip domain suffix
-    .replace(/\s+/g, '')                 // strip whitespace
-    .toLowerCase();
+  const { env } = parseN8nCode();
   if (!env) return '';
   return `https://${env}.app.n8n.cloud/webhook/send-payslip`;
+}
+
+function getWebhookSecret() {
+  if (webhookMode === 'custom') return '';
+  return parseN8nCode().secret;
 }
 
 function updateWebhookPreview() {
   const hint = document.getElementById('webhookPreviewHint');
   if (!hint) return;
+  if (webhookMode !== 'n8n') return;
+  const { env, secret } = parseN8nCode();
   const url = getWebhookUrl();
-  if (webhookMode === 'n8n' && url) {
-    hint.innerHTML = `✅ URL: <code style="direction:ltr;font-family:monospace;font-size:0.72rem;color:var(--accent)">${url}</code>`;
+  if (url && secret) {
+    hint.innerHTML = `✅ סביבה: <code style="direction:ltr;font-family:monospace;font-size:0.72rem;color:var(--accent)">${env}</code> · מפתח: <code style="direction:ltr;font-family:monospace;font-size:0.72rem;color:var(--accent)">${'•'.repeat(Math.min(secret.length, 12))}</code>`;
+  } else if (url && !secret) {
+    hint.innerHTML = '⚠️ חסר מפתח סודי — הוסף <code style="direction:ltr">=your-secret</code> אחרי שם הסביבה';
   } else {
-    hint.innerHTML = '💡 רק שם הסביבה (למשל "orenmeshi") — ללא .app.n8n.cloud';
+    hint.innerHTML = '💡 פורמט: <code style="direction:ltr">שם-סביבה=מפתח-סודי</code> — המפתח נשלח כ-header לאימות ב-n8n';
   }
 }
 
@@ -2462,7 +2480,13 @@ async function buildSendTasks() {
 
 async function sendToN8n() {
   const webhookUrl = getWebhookUrl();
-  if (!webhookUrl) { alert('נא להזין שם סביבה או כתובת webhook'); return; }
+  if (!webhookUrl) { alert('נא להזין קוד שליחה (פורמט: שם-סביבה=מפתח-סודי)'); return; }
+
+  const webhookSecret = getWebhookSecret();
+  if (webhookMode === 'n8n' && !webhookSecret) {
+    alert('חסר מפתח סודי. הפורמט הנדרש: שם-סביבה=מפתח-סודי');
+    return;
+  }
 
   if (!validateSchedule()) { alert('מועד השליחה המתוזמן חייב להיות בעתיד'); return; }
 
@@ -2513,10 +2537,13 @@ async function sendToN8n() {
       form.append('scope', scope);
       Object.entries(t.extra || {}).forEach(([k,v]) => form.append(k, v));
 
-      const resp = await fetch(webhookUrl, { method: 'POST', body: form });
+      const fetchOpts = { method: 'POST', body: form };
+      if (webhookSecret) fetchOpts.headers = { 'X-Webhook-Secret': webhookSecret };
+      const resp = await fetch(webhookUrl, fetchOpts);
       if (!resp.ok) {
         httpErrors++;
-        failureDetails.push(`${t.filename}: HTTP ${resp.status}`);
+        const statusMsg = resp.status === 401 ? 'מפתח סודי שגוי' : `HTTP ${resp.status}`;
+        failureDetails.push(`${t.filename}: ${statusMsg}`);
         continue;
       }
       // Parse n8n response: { status, sent?, failed?, failures?, recipients_count?, send_at_utc? }
