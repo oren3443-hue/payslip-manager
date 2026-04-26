@@ -1856,6 +1856,8 @@ function buildEmailHtml(bodyText, task, scope) {
     .om-footer { background:#111827 !important; }
     .om-footer-brand { color:#F1F5F9 !important; }
     .om-footer-tagline { color:#94A3B8 !important; }
+    .om-message { background:#0F172A !important; }
+    .om-message div { color:#CBD5E1 !important; }
   }
   @media only screen and (max-width:600px) {
     .om-container { padding:20px 8px !important; }
@@ -1902,6 +1904,18 @@ function buildEmailHtml(bodyText, task, scope) {
           </td></tr>
         </table>
       </td></tr>
+
+      ${userText ? `
+      <!-- Personal message from sender -->
+      <tr><td style="padding:0 32px 28px">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation" class="om-message" style="background:#F8F7F2;border-radius:12px;border-right:3px solid #6FCBBE">
+          <tr><td style="padding:20px 24px;text-align:right;direction:rtl">
+            <div class="om-subtle" style="font-family:Arial,'Segoe UI',Helvetica,sans-serif;font-size:14px;color:#374151;line-height:1.7">
+              ${userText}
+            </div>
+          </td></tr>
+        </table>
+      </td></tr>` : ''}
 
       <!-- Attachment note (soft, not a button) -->
       <tr><td style="padding:4px 48px 14px;text-align:center;direction:rtl">
