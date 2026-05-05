@@ -2528,66 +2528,92 @@ async function sendToN8n() {
   if (error) { btn.disabled = false; btn.innerHTML = '📧 שלח ישירות ל-n8n'; alert(error); return; }
   if (!tasks.length) { btn.disabled = false; btn.innerHTML = '📧 שלח ישירות ל-n8n'; alert('אין למי לשלוח. הזן מיילים או העלה קובץ אקסל.'); return; }
 
-  btn.innerHTML = '<span class="spinner"></span> שולח...';
+  btn.innerHTML = '<span class="spinner"></span> מכין משלוח...';
   document.getElementById('progressWrap').classList.remove('hidden');
+  setProgress(20, `מכין ${tasks.length} תלושים...`);
 
   let totalSent = 0, totalFailed = 0, totalScheduled = 0, httpErrors = 0;
   const failureDetails = [];
+
+  const form = new FormData();
+  const meta = [];
+  let totalBytes = 0;
+  let totalRecipients = 0;
   for (let i = 0; i < tasks.length; i++) {
     const t = tasks[i];
-    setProgress(Math.round((i / tasks.length) * 100), `שולח: ${t.filename} (${i + 1}/${tasks.length})`);
-    try {
-      const bodyHtml = buildEmailHtml(body, t, scope);
-      const form = new FormData();
-      form.append('data', new Blob([t.pdfBytes], { type: t.mimeType || 'application/pdf' }), t.filename);
-      form.append('email', t.emails.join(','));
-      form.append('recipients_count', String(t.emails.length));
-      form.append('subject', t.subject);
-      form.append('body', body || 'מצורף תלוש השכר שלך.');
-      form.append('body_html', bodyHtml);
-      form.append('send_at', sendAt);
-      form.append('send_at_utc', sendAtUtc);
-      form.append('schedule_mode', scheduleMode);
-      form.append('scope', scope);
-      Object.entries(t.extra || {}).forEach(([k,v]) => form.append(k, v));
+    const blob = new Blob([t.pdfBytes], { type: t.mimeType || 'application/pdf' });
+    totalBytes += blob.size;
+    totalRecipients += t.emails.length;
+    const binaryKey = `file_${i}`;
+    form.append(binaryKey, blob, t.filename);
+    meta.push({
+      index: i,
+      binary_key: binaryKey,
+      filename: t.filename,
+      emails: t.emails,
+      subject: t.subject,
+      body: body || 'מצורף תלוש השכר שלך.',
+      body_html: buildEmailHtml(body, t, scope),
+      ...(t.extra || {})
+    });
+  }
 
-      const fetchOpts = { method: 'POST', body: form };
-      if (webhookSecret) fetchOpts.headers = { 'X-Webhook-Secret': webhookSecret };
-      const resp = await fetch(webhookUrl, fetchOpts);
-      if (!resp.ok) {
-        httpErrors++;
-        const statusMsg = resp.status === 401 ? 'מפתח סודי שגוי' : `HTTP ${resp.status}`;
-        failureDetails.push(`${t.filename}: ${statusMsg}`);
-        continue;
-      }
-      // Parse n8n response: { status, sent?, failed?, failures?, recipients_count?, send_at_utc? }
+  const PAYLOAD_LIMIT_BYTES = 14 * 1024 * 1024;
+  if (totalBytes > PAYLOAD_LIMIT_BYTES) {
+    const mb = (totalBytes / 1024 / 1024).toFixed(1);
+    const proceed = confirm(`גודל המשלוח הכולל ${mb}MB עלול לחרוג ממגבלת n8n (16MB). להמשיך בכל זאת?`);
+    if (!proceed) {
+      btn.disabled = false;
+      btn.innerHTML = '📧 שלח ישירות ל-n8n';
+      setProgress(0, '');
+      document.getElementById('progressWrap').classList.add('hidden');
+      return;
+    }
+  }
+
+  form.append('tasks', JSON.stringify(meta));
+  form.append('send_at', sendAt);
+  form.append('send_at_utc', sendAtUtc);
+  form.append('schedule_mode', scheduleMode);
+  form.append('scope', scope);
+
+  btn.innerHTML = '<span class="spinner"></span> שולח...';
+  setProgress(60, `שולח ${tasks.length} תלושים ל-${totalRecipients} נמענים...`);
+
+  try {
+    const fetchOpts = { method: 'POST', body: form };
+    if (webhookSecret) fetchOpts.headers = { 'X-Webhook-Secret': webhookSecret };
+    const resp = await fetch(webhookUrl, fetchOpts);
+    if (!resp.ok) {
+      httpErrors++;
+      const statusMsg = resp.status === 401 ? 'מפתח סודי שגוי' : `HTTP ${resp.status}`;
+      failureDetails.push(`כל המשלוח: ${statusMsg}`);
+    } else {
       let result = null;
-      try { result = await resp.json(); } catch (_) { /* non-JSON response */ }
+      try { result = await resp.json(); } catch (_) { /* non-JSON */ }
       if (!result || typeof result !== 'object') {
-        // Fallback: assume all succeeded
-        totalSent += t.emails.length;
+        totalSent += totalRecipients;
       } else if (result.status === 'scheduled') {
-        totalScheduled += Number(result.recipients_count || t.emails.length);
+        totalScheduled += Number(result.recipients_count || totalRecipients);
       } else if (result.status === 'sent' || result.status === 'partial') {
         totalSent += Number(result.sent || 0);
         totalFailed += Number(result.failed || 0);
         if (Array.isArray(result.failures)) {
-          result.failures.slice(0, 5).forEach(f => {
-            failureDetails.push(`${f.email || 'unknown'}: ${f.error || 'error'}`);
+          result.failures.slice(0, 10).forEach(f => {
+            failureDetails.push(`${f.email || 'unknown'}${f.filename ? ` (${f.filename})` : ''}: ${f.error || 'error'}`);
           });
         }
       } else if (result.status === 'error') {
-        totalFailed += t.emails.length;
-        failureDetails.push(`${t.filename}: ${result.message || 'error'}`);
+        totalFailed += totalRecipients;
+        failureDetails.push(`שגיאה כללית: ${result.message || 'error'}`);
       } else {
-        // Unknown response — optimistic
-        totalSent += t.emails.length;
+        totalSent += totalRecipients;
       }
-    } catch (e) {
-      console.error(`Failed to send ${t.filename}:`, e);
-      httpErrors++;
-      failureDetails.push(`${t.filename}: ${e.message || 'network error'}`);
     }
+  } catch (e) {
+    console.error('Bulk send failed:', e);
+    httpErrors++;
+    failureDetails.push(`שגיאת רשת: ${e.message || 'network error'}`);
   }
 
   setProgress(100, 'הושלם');

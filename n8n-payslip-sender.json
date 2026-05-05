@@ -3,8 +3,8 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 📑 Payslip Sender\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**אימות:** Header Auth מובנה ב-Webhook node — n8n דוחה בקשות לא מורשות ב-403 לפני שמתחילה זרימה (ללא ניצול execution quota).\n\n**שדות שמגיעים ב-body:**\n- `email` (comma-separated recipients)\n- `subject`, `body`, `body_html` (RTL)\n- `send_at`, `send_at_utc`, `schedule_mode`\n- `scope`, `employee_number`, `name`, `department`, `category`, `month`, `count`\n\n**קובץ מצורף:** `$binary.data`\n\n### אחרי ייבוא:\n1. **צור Credential של Header Auth:**\n   - Credentials → Create New → Header Auth\n   - Name (header): `X-Webhook-Secret`\n   - Value: מפתח אקראי חזק (`openssl rand -hex 24`)\n2. **קשר אותו ל-Webhook node** (שדה Credential for Header Auth).\n3. הגדר Microsoft Outlook / Gmail credential ב-'Send a message'.\n4. Activate את ה-workflow.\n5. ב-HTML הזן: `שם-סביבה=אותו-מפתח` (למשל `orenmeshi=<secret>`).",
-        "height": 460,
+        "content": "## 📑 Payslip Sender (Bulk)\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**אימות:** Header Auth מובנה ב-Webhook node — n8n דוחה בקשות לא מורשות ב-403 לפני שמתחילה זרימה (ללא ניצול execution quota).\n\n**Bulk mode:** קריאת webhook אחת מעבדת **N תלושים** ב-execution אחד.\n\n**שדות שמגיעים ב-body:**\n- `tasks` (JSON string — array של תלושים: index, binary_key, filename, emails, subject, body_html, employee_number, name, department, category, month, count)\n- `send_at`, `send_at_utc`, `schedule_mode`, `scope` (משותפים לכל המשימות)\n\n**קבצים מצורפים:** `file_0`, `file_1`, ... — PDF לכל תלוש לפי `binary_key` ב-tasks.\n\n### אחרי ייבוא:\n1. **צור Credential של Header Auth:**\n   - Credentials → Create New → Header Auth\n   - Name (header): `X-Webhook-Secret`\n   - Value: מפתח אקראי חזק (`openssl rand -hex 24`)\n2. **קשר אותו ל-Webhook node** (שדה Credential for Header Auth).\n3. הגדר Microsoft Outlook / Gmail credential ב-'Send a message'.\n4. אם payload גדול מ-16MB — הגדל את `N8N_PAYLOAD_SIZE_MAX` ב-n8n.\n5. Activate את ה-workflow.\n6. ב-HTML הזן: `שם-סביבה=אותו-מפתח` (למשל `orenmeshi=<secret>`).",
+        "height": 520,
         "width": 420,
         "color": 4
       },
@@ -33,7 +33,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst binary = $input.first().binary || {};\nconst binaryKey = Object.keys(binary)[0];\nconst file = binaryKey ? binary[binaryKey] : null;\n\nconst emails = String(b.email || '')\n  .split(/[,;]+/)\n  .map(e => e.trim())\n  .filter(e => /@/.test(e));\n\nreturn [{\n  json: {\n    emails_array: emails,\n    recipients_count: emails.length,\n    subject: b.subject || 'תלוש שכר',\n    body: b.body || '',\n    body_html: b.body_html || ('<div dir=\"rtl\">' + (b.body || '') + '</div>'),\n    scope: b.scope || 'employee',\n    schedule_mode: b.schedule_mode || 'now',\n    send_at: b.send_at || 'now',\n    send_at_utc: b.send_at_utc || 'now',\n    employee_number: b.employee_number || '',\n    name: b.name || '',\n    department: b.department || '',\n    category: b.category || '',\n    month: b.month || '',\n    count: b.count || '',\n    filename: file ? file.fileName : 'attachment.pdf',\n  },\n  binary: binary\n}];"
+        "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst allBinary = $input.first().binary || {};\n\nlet tasks = [];\ntry {\n  tasks = JSON.parse(b.tasks || '[]');\n} catch (_) {\n  tasks = [];\n}\nif (!Array.isArray(tasks) || !tasks.length) {\n  throw new Error('No tasks in payload — expected JSON array under field \"tasks\"');\n}\n\nconst shared = {\n  schedule_mode: b.schedule_mode || 'now',\n  send_at: b.send_at || 'now',\n  send_at_utc: b.send_at_utc || 'now',\n  scope: b.scope || 'employee',\n};\n\nreturn tasks.map((t, idx) => {\n  const emails = (Array.isArray(t.emails) ? t.emails : String(t.emails || '').split(/[,;]+/))\n    .map(e => String(e).trim())\n    .filter(e => /@/.test(e));\n  const key = t.binary_key || ('file_' + (t.index != null ? t.index : idx));\n  const fileBin = allBinary[key];\n  return {\n    json: {\n      ...shared,\n      task_index: idx,\n      emails_array: emails,\n      recipients_count: emails.length,\n      subject: t.subject || 'תלוש שכר',\n      body: t.body || '',\n      body_html: t.body_html || ('<div dir=\"rtl\">' + (t.body || '') + '</div>'),\n      employee_number: t.employee_number || '',\n      name: t.name || '',\n      department: t.department || '',\n      category: t.category || '',\n      month: t.month || '',\n      count: t.count || '',\n      filename: t.filename || (fileBin && fileBin.fileName) || 'attachment.pdf',\n    },\n    binary: fileBin ? { data: fileBin } : {}\n  };\n});"
       },
       "id": "9a4b99a2-bcb2-4fd5-8189-735a221b5531",
       "name": "Normalize",
@@ -74,7 +74,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"status\": \"scheduled\", \"send_at_utc\": $json.send_at_utc, \"recipients_count\": $json.recipients_count, \"scope\": $json.scope } }}",
+        "responseBody": "={{ { \"status\": \"scheduled\", \"send_at_utc\": $json.send_at_utc, \"recipients_count\": $('Normalize').all().reduce((s, i) => s + (i.json.recipients_count || 0), 0), \"tasks_count\": $('Normalize').all().length, \"scope\": $json.scope } }}",
         "options": {}
       },
       "id": "533894b6-7002-4792-b0c7-2cc67890a222",
@@ -124,7 +124,7 @@
             ]
           },
           "bodyContentType": "html",
-          "replyTo": "oren@orenmeshi.com"
+          "isReadReceiptRequested": true
         }
       },
       "id": "79cc9a90-3432-42e4-8c9a-aff6e51c5ca0",
@@ -136,7 +136,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst failed = items.filter(i => i.json.error || i.error).map(i => ({\n  email: i.json.current_email || 'unknown',\n  error: String((i.json.error && i.json.error.message) || (i.error && i.error.message) || 'unknown error')\n}));\nconst sent = items.length - failed.length;\nreturn [{\n  json: {\n    status: failed.length === 0 ? 'sent' : (sent === 0 ? 'error' : 'partial'),\n    sent: sent,\n    failed: failed.length,\n    total: items.length,\n    failures: failed,\n    schedule_mode: (items[0] && items[0].json && items[0].json.schedule_mode) || 'now'\n  }\n}];"
+        "jsCode": "const items = $input.all();\nconst failed = items.filter(i => i.json.error || i.error).map(i => ({\n  email: i.json.current_email || 'unknown',\n  filename: i.json.filename || '',\n  error: String((i.json.error && i.json.error.message) || (i.error && i.error.message) || 'unknown error')\n}));\nconst sent = items.length - failed.length;\nreturn [{\n  json: {\n    status: failed.length === 0 ? 'sent' : (sent === 0 ? 'error' : 'partial'),\n    sent: sent,\n    failed: failed.length,\n    total: items.length,\n    failures: failed,\n    schedule_mode: (items[0] && items[0].json && items[0].json.schedule_mode) || 'now'\n  }\n}];"
       },
       "id": "01e999be-9e5d-45e3-911e-d64624a17a8c",
       "name": "Aggregate Results",
@@ -188,8 +188,8 @@
     },
     {
       "parameters": {
-        "content": "### ⚠️ הערות\n- אימות ה-header נעשה ע\"י n8n **לפני** הפעלת הזרימה — מי שלא שולח header נכון מקבל 403 ולא צורך execution quota.\n- ה-Webhook משתמש ב-`responseNode` — הזרימה חייבת להחזיר דרך `Respond Scheduled` או `Respond Sent`.\n- ה-Wait משתמש ב-`send_at_utc` — חד-משמעי ללא TZ.\n- אל תכניס את המפתח לקובץ ה-JSON שב-git! המפתח חי רק ב-credential וב-HTML המקומי.",
-        "height": 240,
+        "content": "### ⚠️ הערות\n- אימות ה-header נעשה ע\"י n8n **לפני** הפעלת הזרימה — מי שלא שולח header נכון מקבל 403 ולא צורך execution quota.\n- ה-Webhook משתמש ב-`responseNode` — הזרימה חייבת להחזיר דרך `Respond Scheduled` או `Respond Sent`.\n- במצב מתוזמן: 'Respond Scheduled' מסכם דרך `$('Normalize').all()`, עונה מיד, וה-N items זורמים ל-Wait.\n- ה-Wait משתמש ב-`send_at_utc` — חד-משמעי ללא TZ.\n- אל תכניס את המפתח לקובץ ה-JSON שב-git! המפתח חי רק ב-credential וב-HTML המקומי.",
+        "height": 280,
         "width": 420,
         "color": 5
       },
@@ -197,7 +197,7 @@
       "name": "הערות",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1424, -400]
+      "position": [1424, -380]
     }
   ],
   "connections": {
