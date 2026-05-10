@@ -3,8 +3,8 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## 📑 Payslip Sender (Bulk)\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**אימות:** Header Auth מובנה ב-Webhook node — n8n דוחה בקשות לא מורשות ב-403 לפני שמתחילה זרימה (ללא ניצול execution quota).\n\n**Bulk mode:** קריאת webhook אחת מעבדת **N תלושים** ב-execution אחד.\n\n**שדות שמגיעים ב-body:**\n- `tasks` (JSON string — array של תלושים: index, binary_key, filename, emails, subject, body_html, employee_number, name, department, category, month, count)\n- `send_at`, `send_at_utc`, `schedule_mode`, `scope` (משותפים לכל המשימות)\n\n**קבצים מצורפים:** `file_0`, `file_1`, ... — PDF לכל תלוש לפי `binary_key` ב-tasks.\n\n### אחרי ייבוא:\n1. **צור Credential של Header Auth:**\n   - Credentials → Create New → Header Auth\n   - Name (header): `X-Webhook-Secret`\n   - Value: מפתח אקראי חזק (`openssl rand -hex 24`)\n2. **קשר אותו ל-Webhook node** (שדה Credential for Header Auth).\n3. הגדר Microsoft Outlook / Gmail credential ב-'Send a message'.\n4. אם payload גדול מ-16MB — הגדל את `N8N_PAYLOAD_SIZE_MAX` ב-n8n.\n5. Activate את ה-workflow.\n6. ב-HTML הזן: `שם-סביבה=אותו-מפתח` (למשל `orenmeshi=<secret>`).",
-        "height": 520,
+        "content": "## 📑 Payslip Sender (Bulk + Server-Side Schedule)\n\n**Webhook URL:** `/webhook/send-payslip`\n\n**Bulk:** קריאת webhook אחת מעבדת **N תלושים** ב-execution אחד.\n\n**Scheduled mode** משתמש ב-Microsoft Graph עם MAPI extended property `PR_DEFERRED_SEND_TIME` (`SystemTime 0x3FEF`). Exchange Online מחזיק את ההודעה בצד שרת ושולח אותה בזמן שצוין — בלי Wait, בלי בעיית binary שנעלם, בלי תלות ב-execution שרץ.\n\n**שדות שמגיעים ב-body:**\n- `tasks` (JSON string — array של תלושים: index, binary_key, filename, emails, subject, body_html, employee_number, name, department, category, month, count)\n- `send_at_utc`, `schedule_mode`, `scope`\n\n**קבצים מצורפים:** `file_0..N` — PDF לכל תלוש לפי `binary_key`.\n\n### אחרי ייבוא:\n1. **Header Auth credential** ל-Webhook1: `X-Webhook-Secret`.\n2. **Microsoft Outlook OAuth2** credential על Create Draft, Send Draft, ו-Send Mail (predefinedCredentialType).\n3. אם payload גדול מ-16MB — הגדל את `N8N_PAYLOAD_SIZE_MAX`.\n4. Activate.",
+        "height": 480,
         "width": 420,
         "color": 4
       },
@@ -12,7 +12,7 @@
       "name": "הוראות",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [40, 60]
+      "position": [40, -480]
     },
     {
       "parameters": {
@@ -28,18 +28,35 @@
       "name": "Webhook1",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [656, -656],
+      "position": [400, -400],
       "webhookId": "send-payslip"
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
         "jsCode": "const b = $input.first().json.body || $input.first().json;\nconst allBinary = $input.first().binary || {};\n\nlet tasks = [];\ntry {\n  tasks = JSON.parse(b.tasks || '[]');\n} catch (_) {\n  tasks = [];\n}\nif (!Array.isArray(tasks) || !tasks.length) {\n  throw new Error('No tasks in payload — expected JSON array under field \"tasks\"');\n}\n\nconst shared = {\n  schedule_mode: b.schedule_mode || 'now',\n  send_at: b.send_at || 'now',\n  send_at_utc: b.send_at_utc || 'now',\n  scope: b.scope || 'employee',\n};\n\nreturn tasks.map((t, idx) => {\n  const emails = (Array.isArray(t.emails) ? t.emails : String(t.emails || '').split(/[,;]+/))\n    .map(e => String(e).trim())\n    .filter(e => /@/.test(e));\n  const key = t.binary_key || ('file_' + (t.index != null ? t.index : idx));\n  const fileBin = allBinary[key];\n  return {\n    json: {\n      ...shared,\n      task_index: idx,\n      emails_array: emails,\n      recipients_count: emails.length,\n      subject: t.subject || 'תלוש שכר',\n      body: t.body || '',\n      body_html: t.body_html || ('<div dir=\"rtl\">' + (t.body || '') + '</div>'),\n      employee_number: t.employee_number || '',\n      name: t.name || '',\n      department: t.department || '',\n      category: t.category || '',\n      month: t.month || '',\n      count: t.count || '',\n      filename: t.filename || (fileBin && fileBin.fileName) || 'attachment.pdf',\n    },\n    binary: fileBin ? { data: fileBin } : {}\n  };\n});"
       },
       "id": "9a4b99a2-bcb2-4fd5-8189-735a221b5531",
       "name": "Normalize",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [864, -656]
+      "position": [600, -400]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "emails_array",
+        "include": "allOtherFields",
+        "options": {
+          "destinationFieldName": "current_email",
+          "includeBinary": true
+        }
+      },
+      "id": "c29786a1-ade1-42e2-b369-6f0b8921a7bb",
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [800, -400]
     },
     {
       "parameters": {
@@ -47,8 +64,7 @@
           "options": {
             "caseSensitive": true,
             "leftValue": "",
-            "typeValidation": "loose",
-            "version": 1
+            "typeValidation": "loose"
           },
           "conditions": [
             {
@@ -68,244 +84,175 @@
       "id": "05442ecd-7f7b-440d-9cc4-c51e62b6b040",
       "name": "האם מתוזמן?",
       "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [1088, -656]
+      "typeVersion": 2.3,
+      "position": [1000, -400]
     },
     {
       "parameters": {
-        "respondWith": "json",
-        "responseBody": "={{ { \"status\": \"scheduled\", \"send_at_utc\": $json.send_at_utc, \"recipients_count\": $('Normalize').all().reduce((s, i) => s + (i.json.recipients_count || 0), 0), \"tasks_count\": $('Normalize').all().length, \"scope\": $json.scope } }}",
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const j = item.json;\n  const buffer = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const base64 = buffer.toString('base64');\n  out.push({\n    json: {\n      ...j,\n      draft_body: {\n        subject: j.subject,\n        body: { contentType: 'HTML', content: j.body_html },\n        toRecipients: [{ emailAddress: { address: j.current_email } }],\n        attachments: [{\n          '@odata.type': '#microsoft.graph.fileAttachment',\n          name: j.filename,\n          contentBytes: base64\n        }],\n        singleValueExtendedProperties: [{\n          id: 'SystemTime 0x3FEF',\n          value: j.send_at_utc\n        }]\n      }\n    }\n  });\n}\nreturn out;"
+      },
+      "id": "build-draft-body",
+      "name": "Build Draft Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, -550]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.draft_body }}",
         "options": {}
       },
-      "id": "533894b6-7002-4792-b0c7-2cc67890a222",
-      "name": "Respond Scheduled",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.5,
-      "position": [1200, -880]
-    },
-    {
-      "parameters": {
-        "resume": "specificTime",
-        "dateTime": "={{ $json.send_at_utc }}"
-      },
-      "id": "687d3e07-d57b-4a26-930c-473dce57b353",
-      "name": "המתן עד מועד",
-      "type": "n8n-nodes-base.wait",
-      "typeVersion": 1.1,
-      "position": [1424, -768],
-      "webhookId": "wait-payslip"
-    },
-    {
-      "parameters": {
-        "fieldToSplitOut": "emails_array",
-        "include": "allOtherFields",
-        "options": {
-          "destinationFieldName": "current_email",
-          "includeBinary": true
-        }
-      },
-      "id": "c29786a1-ade1-42e2-b369-6f0b8921a7bb",
-      "name": "Split Out",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
-      "position": [1648, -688]
-    },
-    {
-      "parameters": {
-        "toRecipients": "={{ $json.current_email }}",
-        "subject": "={{ $json.subject }}",
-        "bodyContent": "={{ $json.body_html }}",
-        "additionalFields": {
-          "attachments": {
-            "attachments": [
-              {
-                "binaryPropertyName": "data"
-              }
-            ]
-          },
-          "bodyContentType": "html",
-          "isReadReceiptRequested": true
-        }
-      },
-      "id": "79cc9a90-3432-42e4-8c9a-aff6e51c5ca0",
-      "name": "Send a message",
-      "type": "n8n-nodes-base.microsoftOutlook",
-      "typeVersion": 2,
-      "position": [1872, -672],
+      "id": "create-draft",
+      "name": "Create Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1400, -550],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "jsCode": "const items = $input.all();\nconst failed = items.filter(i => i.json.error || i.error).map(i => ({\n  email: i.json.current_email || 'unknown',\n  filename: i.json.filename || '',\n  error: String((i.json.error && i.json.error.message) || (i.error && i.error.message) || 'unknown error')\n}));\nconst sent = items.length - failed.length;\nreturn [{\n  json: {\n    status: failed.length === 0 ? 'sent' : (sent === 0 ? 'error' : 'partial'),\n    sent: sent,\n    failed: failed.length,\n    total: items.length,\n    failures: failed,\n    schedule_mode: (items[0] && items[0].json && items[0].json.schedule_mode) || 'now'\n  }\n}];"
+        "method": "POST",
+        "url": "={{ \"https://graph.microsoft.com/v1.0/me/messages/\" + $json.id + \"/send\" }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "sendBody": false,
+        "options": {}
+      },
+      "id": "send-draft",
+      "name": "Send Draft",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1600, -550],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst out = [];\nfor (let i = 0; i < items.length; i++) {\n  const item = items[i];\n  const j = item.json;\n  const buffer = await this.helpers.getBinaryDataBuffer(i, 'data');\n  const base64 = buffer.toString('base64');\n  out.push({\n    json: {\n      ...j,\n      sendmail_body: {\n        message: {\n          subject: j.subject,\n          body: { contentType: 'HTML', content: j.body_html },\n          toRecipients: [{ emailAddress: { address: j.current_email } }],\n          attachments: [{\n            '@odata.type': '#microsoft.graph.fileAttachment',\n            name: j.filename,\n            contentBytes: base64\n          }]\n        },\n        saveToSentItems: true\n      }\n    }\n  });\n}\nreturn out;"
+      },
+      "id": "build-sendmail-body",
+      "name": "Build SendMail Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1200, -250]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.microsoft.com/v1.0/me/sendMail",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "microsoftOutlookOAuth2Api",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.sendmail_body }}",
+        "options": {}
+      },
+      "id": "send-mail",
+      "name": "Send Mail",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1400, -250],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst split = $('Split Out').all();\nconst failures = [];\nlet ok = 0;\nfor (let i = 0; i < items.length; i++) {\n  const out = items[i] && items[i].json || {};\n  const errMsg = out.error || (items[i] && items[i].error && items[i].error.message);\n  if (errMsg) {\n    const orig = (split[i] && split[i].json) || {};\n    failures.push({\n      email: orig.current_email || 'unknown',\n      filename: orig.filename || '',\n      error: typeof errMsg === 'string' ? errMsg : String(errMsg)\n    });\n  } else {\n    ok++;\n  }\n}\nconst scheduleMode = (split[0] && split[0].json && split[0].json.schedule_mode) || 'now';\nconst total = items.length;\nconst status = failures.length === 0\n  ? (scheduleMode === 'scheduled' ? 'scheduled' : 'sent')\n  : (ok === 0 ? 'error' : 'partial');\nreturn [{\n  json: {\n    status: status,\n    sent: scheduleMode === 'now' ? ok : 0,\n    scheduled: scheduleMode === 'scheduled' ? ok : 0,\n    failed: failures.length,\n    total: total,\n    failures: failures,\n    schedule_mode: scheduleMode,\n    send_at_utc: (split[0] && split[0].json && split[0].json.send_at_utc) || 'now',\n    scope: (split[0] && split[0].json && split[0].json.scope) || 'employee',\n    recipients_count: total\n  }\n}];"
       },
       "id": "01e999be-9e5d-45e3-911e-d64624a17a8c",
       "name": "Aggregate Results",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2096, -672]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "loose",
-            "version": 1
-          },
-          "conditions": [
-            {
-              "id": "cond-scheduled-2",
-              "leftValue": "={{ $json.schedule_mode }}",
-              "rightValue": "scheduled",
-              "operator": {
-                "type": "string",
-                "operation": "equals"
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
-      },
-      "id": "d4b4b65c-4e05-45c7-88ea-4dbeaa277589",
-      "name": "כבר הגיב?",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 2.2,
-      "position": [2320, -672]
+      "position": [1800, -400]
     },
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ { \"status\": $json.status, \"sent\": $json.sent, \"failed\": $json.failed, \"total\": $json.total, \"failures\": $json.failures } }}",
+        "responseBody": "={{ { \"status\": $json.status, \"sent\": $json.sent, \"scheduled\": $json.scheduled, \"failed\": $json.failed, \"total\": $json.total, \"failures\": $json.failures, \"send_at_utc\": $json.send_at_utc, \"recipients_count\": $json.recipients_count, \"scope\": $json.scope } }}",
         "options": {}
       },
       "id": "d3b7e33b-7a85-45b5-a61a-c58ed7a71158",
       "name": "Respond Sent",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
-      "position": [2544, -560]
+      "position": [2000, -400]
     },
     {
       "parameters": {
-        "content": "### ⚠️ הערות\n- אימות ה-header נעשה ע\"י n8n **לפני** הפעלת הזרימה — מי שלא שולח header נכון מקבל 403 ולא צורך execution quota.\n- ה-Webhook משתמש ב-`responseNode` — הזרימה חייבת להחזיר דרך `Respond Scheduled` או `Respond Sent`.\n- במצב מתוזמן: 'Respond Scheduled' מסכם דרך `$('Normalize').all()`, עונה מיד, וה-N items זורמים ל-Wait.\n- ה-Wait משתמש ב-`send_at_utc` — חד-משמעי ללא TZ.\n- אל תכניס את המפתח לקובץ ה-JSON שב-git! המפתח חי רק ב-credential וב-HTML המקומי.",
-        "height": 280,
-        "width": 420,
+        "content": "### ⚠️ הערות\n- Scheduled mode: ה-`send_at_utc` נשלח כ-`SystemTime 0x3FEF` ל-Graph API. Exchange Online מטפל בעיכוב.\n- אם הזמן בעבר — Exchange ישלח מיד.\n- מקסימום עיכוב ~365 יום.\n- שום Wait בתוך n8n — execution קצר ויעיל.\n- אין יותר temp/binary שנעלם.",
+        "height": 220,
+        "width": 380,
         "color": 5
       },
       "id": "sticky-2",
       "name": "הערות",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [1424, -380]
+      "position": [1200, -120]
     }
   ],
   "connections": {
     "Webhook1": {
       "main": [
-        [
-          {
-            "node": "Normalize",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Normalize", "type": "main", "index": 0 }]
       ]
     },
     "Normalize": {
       "main": [
-        [
-          {
-            "node": "האם מתוזמן?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "האם מתוזמן?": {
-      "main": [
-        [
-          {
-            "node": "Respond Scheduled",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Split Out",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Respond Scheduled": {
-      "main": [
-        [
-          {
-            "node": "המתן עד מועד",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "המתן עד מועד": {
-      "main": [
-        [
-          {
-            "node": "Split Out",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Split Out", "type": "main", "index": 0 }]
       ]
     },
     "Split Out": {
       "main": [
-        [
-          {
-            "node": "Send a message",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "האם מתוזמן?", "type": "main", "index": 0 }]
       ]
     },
-    "Send a message": {
+    "האם מתוזמן?": {
       "main": [
-        [
-          {
-            "node": "Aggregate Results",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Build Draft Body", "type": "main", "index": 0 }],
+        [{ "node": "Build SendMail Body", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build Draft Body": {
+      "main": [
+        [{ "node": "Create Draft", "type": "main", "index": 0 }]
+      ]
+    },
+    "Create Draft": {
+      "main": [
+        [{ "node": "Send Draft", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Draft": {
+      "main": [
+        [{ "node": "Aggregate Results", "type": "main", "index": 0 }]
+      ]
+    },
+    "Build SendMail Body": {
+      "main": [
+        [{ "node": "Send Mail", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send Mail": {
+      "main": [
+        [{ "node": "Aggregate Results", "type": "main", "index": 0 }]
       ]
     },
     "Aggregate Results": {
       "main": [
-        [
-          {
-            "node": "כבר הגיב?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "כבר הגיב?": {
-      "main": [
-        [],
-        [
-          {
-            "node": "Respond Sent",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Respond Sent", "type": "main", "index": 0 }]
       ]
     }
   },
