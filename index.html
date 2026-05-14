@@ -2597,6 +2597,7 @@ async function sendToN8n() {
         totalScheduled += Number(result.recipients_count || totalRecipients);
       } else if (result.status === 'sent' || result.status === 'partial') {
         totalSent += Number(result.sent || 0);
+        totalScheduled += Number(result.scheduled || 0);
         totalFailed += Number(result.failed || 0);
         if (Array.isArray(result.failures)) {
           result.failures.slice(0, 10).forEach(f => {
